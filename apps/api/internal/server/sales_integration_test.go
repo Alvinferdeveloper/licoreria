@@ -72,6 +72,14 @@ func TestSaleFlow(t *testing.T) {
 	}
 
 	saleID := created.body["id"].(string)
+	expectStatus(t, cashier.do(http.MethodGet, "/sales/"+saleID+"/invoice.pdf", nil), http.StatusOK, "invoice pdf")
+	expectStatus(t, cashier.do(http.MethodPost, "/sales/"+saleID+"/email", map[string]string{"email": "cliente@correo.ni"}), http.StatusNoContent, "email invoice")
+	var queued int
+	_ = env.pool.QueryRow(ctx, `SELECT count(*) FROM email_queue WHERE template_key = 'invoice'`).Scan(&queued)
+	if queued != 1 {
+		t.Errorf("invoice email should be queued, got %d", queued)
+	}
+
 	expectStatus(t, cashier.do(http.MethodPost, "/sales/"+saleID+"/void", map[string]any{
 		"reason": "Cliente se arrepintió", "authorization": map[string]string{"username": "lucia", "pin": "4821"},
 	}), http.StatusOK, "void with pin")

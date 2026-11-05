@@ -24,6 +24,8 @@ func (h *Handler) Routes(r chi.Router) {
 		r.With(auth.Require("pos", "create")).Post("/", h.create)
 		r.With(auth.Require("sales", "view")).Get("/{id}", h.get)
 		r.With(auth.Require("sales", "view")).Post("/{id}/void", h.void)
+		r.With(auth.Require("sales", "view")).Get("/{id}/invoice.pdf", h.invoicePDF)
+		r.With(auth.Require("sales", "view")).Post("/{id}/email", h.email)
 	})
 }
 
@@ -155,6 +157,46 @@ func (h *Handler) get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, r, http.StatusOK, sale)
+}
+
+func (h *Handler) invoicePDF(w http.ResponseWriter, r *http.Request) {
+	id, err := httpx.URLParamUUID(r, "id")
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	p, _ := auth.FromContext(r.Context())
+	sale, pdf, err := h.svc.Invoice(r.Context(), p, id)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/pdf")
+	w.Header().Set("Content-Disposition", `inline; filename="factura-`+sale.Invoice+`.pdf"`)
+	_, _ = w.Write(pdf)
+}
+
+type emailRequest struct {
+	Email string `json:"email" validate:"required,email,max=254"`
+}
+
+func (h *Handler) email(w http.ResponseWriter, r *http.Request) {
+	id, err := httpx.URLParamUUID(r, "id")
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	var req emailRequest
+	if err := httpx.Bind(w, r, &req); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	p, _ := auth.FromContext(r.Context())
+	if err := h.svc.Email(r.Context(), p, id, req.Email); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	httpx.NoContent(w)
 }
 
 type voidRequest struct {

@@ -40,6 +40,37 @@ export const salesCopy = {
   },
 } as const;
 
+export const invoiceCopy = {
+  ticket: "Ticket",
+  pdf: "Factura",
+  email: "Correo",
+  emailLabel: "Correo del cliente",
+  send: "Enviar",
+  sent: (to: string) => `Factura enviada a ${to}.`,
+  invalidEmail: "Escribe un correo válido.",
+  pdfError: "No se pudo generar la factura. Intenta de nuevo.",
+  ticketView: {
+    title: (invoice: string) => `Ticket ${invoice}`,
+    width: "Ancho del papel",
+    print: "Imprimir",
+    taxId: (v: string) => `RUC ${v}`,
+    cashier: (name: string) => `Cajero: ${name}`,
+    customer: (name: string) => `Cliente: ${name}`,
+    subtotal: "Subtotal",
+    discount: "Descuento",
+    tax: "IVA",
+    total: "TOTAL",
+    usd: (amount: string) => `Equivale a ${amount}`,
+    paid: "Entregado",
+    change: "Vuelto",
+    rate: (rate: string) => `Tasa: C$ ${rate}`,
+    thanks: "¡Gracias por su compra!",
+    age: "Venta de alcohol solo a mayores de 18 años.",
+    fiscal: "Comprobante interno sin validez fiscal.",
+    voided: "ANULADA",
+  },
+} as const;
+
 export const pinCopy = {
   title: "PIN de autorización",
   description: "Con él apruebas en caja descuentos sobre el límite y anulaciones de ventas. Usa de 4 a 6 dígitos que solo tú conozcas.",

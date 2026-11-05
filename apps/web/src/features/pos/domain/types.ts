@@ -75,5 +75,6 @@ export interface HeldSale {
   /** Products as last seen, to keep checking stock after resuming. */
   products: Record<string, PosProduct>;
   discount: Discount | null;
+  customer: Customer | null;
   heldAt: string;
 }

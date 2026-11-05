@@ -14,6 +14,7 @@ import { usePosStore } from "../store/pos-store";
 import { useCartTotals } from "../store/selectors";
 import { BillTotals } from "./bill-totals";
 import { CartLineItem } from "./cart-line-item";
+import { CustomerSheet } from "./customer-sheet";
 import { DiscountSheet } from "./discount-sheet";
 
 export function CartView() {
@@ -36,6 +37,9 @@ export function CartView() {
   const totals = useCartTotals();
   const [discountOpen, setDiscountOpen] = useState(false);
   const [heldOpen, setHeldOpen] = useState(false);
+  const [customerOpen, setCustomerOpen] = useState(false);
+  const customer = usePosStore((state) => state.customer);
+  const setCustomer = usePosStore((state) => state.setCustomer);
 
   const isEmpty = lines.length === 0;
   const discountLabel = discount ? posCopy.discount.summary(discount.kind === "percent" ? `${discount.value} %` : formatMoney(discount.value)) : undefined;
@@ -43,10 +47,18 @@ export function CartView() {
   return (
     <>
       <div className="flex items-center justify-between gap-2 border-b border-line px-5 py-3">
-        <p className="flex items-center gap-2 text-label text-ink">
-          <UserCircle size={20} className="text-ink-muted" aria-hidden />
-          {posCopy.bill.customer}
-        </p>
+        <button
+          type="button"
+          className="flex min-w-0 items-center gap-2 rounded-md px-1.5 py-1 text-left text-label text-ink hover:bg-sunken"
+          title={posCopy.customer.change}
+          onClick={() => setCustomerOpen(true)}
+        >
+          <UserCircle size={20} className="shrink-0 text-ink-muted" aria-hidden />
+          <span className="min-w-0">
+            <span className="block truncate">{customer?.name ?? posCopy.bill.customer}</span>
+            {customer?.taxId && <span className="block font-mono text-caption text-ink-muted">{customer.taxId}</span>}
+          </span>
+        </button>
         <div className="flex items-center gap-1">
           {held.length > 0 && (
             <Button variant="ghost" size="sm" aria-expanded={heldOpen} onClick={() => setHeldOpen(!heldOpen)}>
@@ -151,6 +163,15 @@ export function CartView() {
         )}
       </footer>
 
+      <CustomerSheet
+        open={customerOpen}
+        onClose={() => setCustomerOpen(false)}
+        onPick={(c) => {
+          setCustomer(c);
+          setCustomerOpen(false);
+          focusSearch();
+        }}
+      />
       <DiscountSheet
         open={discountOpen}
         current={discount}

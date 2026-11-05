@@ -13,6 +13,7 @@ import {
   setQuantity,
   summarizeTender,
   type CartLine,
+  type Customer,
   type Discount,
   type HeldSale,
   type Payment,
@@ -29,6 +30,7 @@ export interface CompletedSale {
   paid: Cents;
   change: Cents;
   itemCount: number;
+  customerEmail: string | null;
 }
 
 /** Last line added, with a nonce so repeated adds retrigger the highlight. */
@@ -42,6 +44,8 @@ interface PosState {
   /** Products in the cart as last seen, used to check stock when quantities change. */
   products: Record<string, PosProduct>;
   discount: Discount | null;
+  /** Null sells to the walk-in "Consumidor final". */
+  customer: Customer | null;
   ageVerified: boolean;
   held: HeldSale[];
   mode: PosMode;
@@ -63,6 +67,7 @@ interface PosState {
   changeQuantity: (key: string, quantity: number) => boolean;
   clearCart: () => void;
   setDiscount: (discount: Discount | null) => void;
+  setCustomer: (customer: Customer | null) => void;
   setAgeVerified: (verified: boolean) => void;
   setNotice: (notice: string | null) => void;
   holdSale: () => boolean;
@@ -80,6 +85,7 @@ const emptySale = {
   lines: [],
   products: {},
   discount: null,
+  customer: null,
   payments: [],
   ageVerified: false,
   saleKey: null,
@@ -90,9 +96,9 @@ const emptySale = {
 };
 
 /** The cart as the sales API expects it; prices are not sent, the API takes them from the catalog. */
-export function toSaleInput(state: Pick<PosState, "lines" | "discount" | "payments" | "ageVerified">, authorization: Authorization | null): SaleInput {
+export function toSaleInput(state: Pick<PosState, "lines" | "discount" | "customer" | "payments" | "ageVerified">, authorization: Authorization | null): SaleInput {
   return {
-    customerId: null,
+    customerId: state.customer?.id ?? null,
     ageVerified: state.ageVerified,
     notes: "",
     discount: state.discount
@@ -141,25 +147,27 @@ export const usePosStore = create<PosState>()(
 
       setDiscount: (discount) => set({ discount }),
 
+      setCustomer: (customer) => set({ customer }),
+
       setAgeVerified: (ageVerified) => set({ ageVerified }),
 
       setNotice: (notice) => set({ notice }),
 
       holdSale: () => {
-        const { lines, products, discount, held, mode } = get();
+        const { lines, products, discount, customer, held, mode } = get();
         if (mode !== "cart" || lines.length === 0) return false;
-        set({ ...emptySale, held: [...held, { id: crypto.randomUUID(), lines, products, discount, heldAt: new Date().toISOString() }] });
+        set({ ...emptySale, held: [...held, { id: crypto.randomUUID(), lines, products, discount, customer, heldAt: new Date().toISOString() }] });
         return true;
       },
 
       // Swaps with the current cart, which goes on hold if it has items.
       resumeSale: (id) => {
-        const { held, lines, products, discount, mode } = get();
+        const { held, lines, products, discount, customer, mode } = get();
         const sale = held.find((h) => h.id === id);
         if (!sale || mode !== "cart") return;
         const rest = held.filter((h) => h.id !== id);
-        const current = lines.length ? [{ id: crypto.randomUUID(), lines, products, discount, heldAt: new Date().toISOString() }] : [];
-        set({ ...emptySale, lines: sale.lines, products: sale.products, discount: sale.discount, held: [...rest, ...current] });
+        const current = lines.length ? [{ id: crypto.randomUUID(), lines, products, discount, customer, heldAt: new Date().toISOString() }] : [];
+        set({ ...emptySale, lines: sale.lines, products: sale.products, discount: sale.discount, customer: sale.customer ?? null, held: [...rest, ...current] });
       },
 
       discardHeld: (id) => set({ held: get().held.filter((h) => h.id !== id) }),
@@ -201,6 +209,7 @@ export const usePosStore = create<PosState>()(
               paid,
               change: amountToCents(sale.changeNio),
               itemCount: sale.itemCount,
+              customerEmail: sale.customer.email,
             },
           });
         } catch (error) {
@@ -218,7 +227,7 @@ export const usePosStore = create<PosState>()(
     {
       name: "anejo-pos-cart-v3",
       storage: createJSONStorage(() => localStorage),
-      partialize: ({ lines, products, discount, ageVerified, held }) => ({ lines, products, discount, ageVerified, held }),
+      partialize: ({ lines, products, discount, customer, ageVerified, held }) => ({ lines, products, discount, customer, ageVerified, held }),
       skipHydration: true,
     },
   ),

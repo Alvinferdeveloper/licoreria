@@ -52,6 +52,7 @@ type Customer struct {
 	ID    uuid.UUID `json:"id"`
 	Name  string    `json:"name"`
 	TaxID *string   `json:"taxId"`
+	Email *string   `json:"email"`
 }
 
 type Sale struct {
@@ -102,18 +103,19 @@ type repository struct{}
 
 const selectSale = `
 	SELECT s.id, s.invoice_series, s.invoice_number, s.status, r.id, r.name, u.id, u.full_name,
-	       s.customer_id, s.customer_name, s.customer_tax_id, s.shift_id,
+	       s.customer_id, s.customer_name, s.customer_tax_id, c.email::text, s.shift_id,
 	       s.subtotal::text, s.discount::text, s.tax::text, s.total::text, s.exchange_rate::text, s.change_nio::text,
 	       (SELECT COALESCE(sum(quantity * units_per_item), 0) FROM sale_items WHERE sale_id = s.id),
 	       s.notes, s.void_reason, s.voided_at, s.created_at
 	FROM sales s
 	JOIN registers r ON r.id = s.register_id
-	JOIN users u ON u.id = s.user_id`
+	JOIN users u ON u.id = s.user_id
+	JOIN customers c ON c.id = s.customer_id`
 
 func scanSale(row pgx.Row) (Sale, error) {
 	var s Sale
 	err := row.Scan(&s.ID, &s.Series, &s.Number, &s.Status, &s.Register.ID, &s.Register.Name, &s.Cashier.ID, &s.Cashier.Name,
-		&s.Customer.ID, &s.Customer.Name, &s.Customer.TaxID, &s.ShiftID,
+		&s.Customer.ID, &s.Customer.Name, &s.Customer.TaxID, &s.Customer.Email, &s.ShiftID,
 		&s.Subtotal, &s.Discount, &s.Tax, &s.Total, &s.ExchangeRate, &s.ChangeNIO, &s.ItemCount,
 		&s.Notes, &s.VoidReason, &s.VoidedAt, &s.CreatedAt)
 	s.Invoice = fmt.Sprintf("%s-%06d", s.Series, s.Number)

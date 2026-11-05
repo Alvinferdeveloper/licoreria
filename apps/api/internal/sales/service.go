@@ -15,7 +15,9 @@ import (
 	"licoreria/api/internal/cash"
 	"licoreria/api/internal/httpx"
 	"licoreria/api/internal/inventory"
+	"licoreria/api/internal/mail"
 	"licoreria/api/internal/platform/database"
+	"licoreria/api/internal/platform/pdfx"
 	"licoreria/api/internal/rates"
 	"licoreria/api/internal/settings"
 )
@@ -77,6 +79,57 @@ func (s *Service) Get(ctx context.Context, p auth.Principal, id uuid.UUID) (Sale
 		return Sale{}, apperr.ErrNotFound
 	}
 	return sale, err
+}
+
+// Invoice renders the detailed PDF of a sale the user is allowed to see.
+func (s *Service) Invoice(ctx context.Context, p auth.Principal, id uuid.UUID) (Sale, []byte, error) {
+	sale, err := s.Get(ctx, p, id)
+	if err != nil {
+		return Sale{}, nil, err
+	}
+	business, err := settings.GetBusiness(ctx, s.pool)
+	if err != nil {
+		return Sale{}, nil, err
+	}
+	pdf, err := InvoicePDF(sale, business)
+	return sale, pdf, err
+}
+
+// Email queues the invoice to the given address; delivery happens in the background.
+func (s *Service) Email(ctx context.Context, p auth.Principal, id uuid.UUID, to string) error {
+	sale, err := s.Get(ctx, p, id)
+	if err != nil {
+		return err
+	}
+	business, err := settings.GetBusiness(ctx, s.pool)
+	if err != nil {
+		return err
+	}
+	type itemData struct {
+		Name, UnitPrice, Subtotal string
+		Quantity                  int
+	}
+	items := make([]itemData, len(sale.Items))
+	for i, it := range sale.Items {
+		items[i] = itemData{Name: it.Name, Quantity: it.Quantity, UnitPrice: money("C$", it.UnitPrice), Subtotal: money("C$", it.Subtotal)}
+	}
+	discount := ""
+	if mustCents(sale.Discount) > 0 {
+		discount = money("C$", sale.Discount)
+	}
+	return database.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
+		err := mail.Enqueue(ctx, tx, mail.TemplateInvoice, to, map[string]any{
+			"StoreName": business.Name, "StoreTaxID": business.TaxID, "Invoice": sale.Invoice,
+			"Date": pdfx.DateTime(sale.CreatedAt), "Customer": sale.Customer.Name,
+			"Items": items, "Subtotal": money("C$", sale.Subtotal), "Discount": discount, "Tax": money("C$", sale.Tax),
+			"Total": money("C$", sale.Total), "TotalWords": AmountInWords(mustCents(sale.Total)),
+		})
+		if err != nil {
+			return err
+		}
+		return audit.Record(ctx, tx, audit.Entry{UserID: &p.UserID, Action: "sales.emailed", Entity: "sales", EntityID: &id,
+			After: map[string]string{"invoice": sale.Invoice}})
+	})
 }
 
 // Create records a sale. Repeating a request with the same idempotency key returns the

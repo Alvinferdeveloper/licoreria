@@ -8,9 +8,9 @@ import { inputClassName } from "@/components/ui/field";
 import { ApiError, type Page } from "@/lib/api/client";
 import { cn } from "@/lib/cn";
 
-export function SearchInput({ value, onChange, placeholder }: { value: string; onChange: (value: string) => void; placeholder: string }) {
+export function SearchInput({ value, onChange, placeholder, className }: { value: string; onChange: (value: string) => void; placeholder: string; className?: string }) {
   return (
-    <div className="relative w-full max-w-xs">
+    <div className={cn("relative w-full max-w-xs", className)}>
       <MagnifyingGlass size={16} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ink-subtle" aria-hidden />
       <input
         type="search"

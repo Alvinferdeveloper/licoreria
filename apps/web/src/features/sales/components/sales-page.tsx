@@ -21,6 +21,7 @@ import { formatDateTime } from "@/lib/format/date";
 import { amountToCents, formatRate } from "@/lib/money";
 import { salesApi, salesKeys, type Authorization, type Sale, type SaleFilters } from "../api";
 import { salesCopy as copy } from "../copy";
+import { InvoiceActions } from "./invoice-actions";
 
 export function SalesPage() {
   const [search, setSearch] = useState("");
@@ -102,6 +103,7 @@ function SaleSheet({ id, onClose, onVoided }: { id: string | null; onClose: () =
 function SaleDetail({ sale, onVoided }: { sale: Sale; onVoided: (s: Sale) => void }) {
   const d = copy.detail;
   const row = "flex justify-between gap-4";
+  const [message, setMessage] = useState<{ text: string; tone: "success" | "danger" } | null>(null);
   return (
     <div className="space-y-6">
       <p className="text-label text-ink-muted">
@@ -154,6 +156,9 @@ function SaleDetail({ sale, onVoided }: { sale: Sale; onVoided: (s: Sale) => voi
           )}
         </ul>
       </section>
+
+      <InvoiceActions saleId={sale.id} customerEmail={sale.customer.email} onMessage={(text, t) => setMessage({ text, tone: t })} />
+      {message && <Alert tone={message.tone}>{message.text}</Alert>}
 
       {sale.status === "completed" && <VoidForm sale={sale} onVoided={onVoided} />}
     </div>

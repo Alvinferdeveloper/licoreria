@@ -16,6 +16,8 @@ export function useHotkeys(bindings: HotkeyMap) {
     const onKeyDown = (event: KeyboardEvent) => {
       const handler = bindingsRef.current[event.key];
       if (!handler || event.repeat) return;
+      // Focused fields and buttons already handle Enter (submit, click).
+      if (event.key === "Enter" && event.target instanceof Element && event.target.closest("input, textarea, select, button, a")) return;
       event.preventDefault();
       handler(event);
     };

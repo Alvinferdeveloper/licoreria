@@ -19,6 +19,7 @@ const (
 	TemplatePasswordReset  = "password_reset"
 	TemplateLowStock       = "low_stock"
 	TemplateCashDifference = "cash_difference"
+	TemplateInvoice        = "invoice"
 )
 
 type Recipient struct {
