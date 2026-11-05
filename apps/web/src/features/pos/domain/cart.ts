@@ -1,18 +1,21 @@
 import { percentOf, sumCents, type Cents } from "@/lib/money";
+import { allocate, discountAmount, type Discount } from "./discount";
 import type { CartLine, CartTotals, Product, StockLevel } from "./types";
 
 export const lineSubtotal = (line: CartLine): Cents => line.unitPrice * line.quantity;
 
-export const lineTax = (line: CartLine): Cents =>
-  percentOf(lineSubtotal(line), line.taxPercent);
-
-export function computeTotals(lines: readonly CartLine[]): CartTotals {
-  const subtotal = sumCents(lines.map(lineSubtotal));
-  const tax = sumCents(lines.map(lineTax));
+/** Totals with the sale discount spread across lines, so VAT is charged on the discounted base. */
+export function computeTotals(lines: readonly CartLine[], discount: Discount | null = null): CartTotals {
+  const subtotals = lines.map(lineSubtotal);
+  const subtotal = sumCents(subtotals);
+  const discountTotal = discountAmount(discount, subtotal);
+  const shares = allocate(discountTotal, subtotals);
+  const tax = sumCents(lines.map((line, index) => percentOf(subtotals[index] - shares[index], line.taxPercent)));
   return {
     subtotal,
+    discount: discountTotal,
     tax,
-    total: subtotal + tax,
+    total: subtotal - discountTotal + tax,
     itemCount: lines.reduce((count, line) => count + line.quantity, 0),
   };
 }

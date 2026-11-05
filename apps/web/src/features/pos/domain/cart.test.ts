@@ -34,7 +34,7 @@ describe("cart", () => {
 
   it("computes subtotal, tax and total in cents", () => {
     const totals = computeTotals(addProduct(addProduct([], rum), rum));
-    expect(totals).toEqual({ subtotal: 84000, tax: 12600, total: 96600, itemCount: 2 });
+    expect(totals).toEqual({ subtotal: 84000, discount: 0, tax: 12600, total: 96600, itemCount: 2 });
   });
 
   it("classifies stock levels", () => {

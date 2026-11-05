@@ -33,6 +33,7 @@ export interface CartLine {
 
 export interface CartTotals {
   subtotal: Cents;
+  discount: Cents;
   tax: Cents;
   total: Cents;
   itemCount: number;
@@ -49,3 +50,18 @@ export interface Payment {
 }
 
 export type StockLevel = "ok" | "low" | "out";
+
+export interface Customer {
+  id: string;
+  name: string;
+  /** Cédula or RUC; required to issue an invoice in the customer's name. */
+  taxId: string | null;
+  phone: string | null;
+}
+
+export interface HeldSale {
+  id: string;
+  lines: CartLine[];
+  customer: Customer | null;
+  heldAt: string;
+}

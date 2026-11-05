@@ -6,6 +6,8 @@ export interface PosSession {
   exchangeRate: number;
   /** Default VAT percent applied to products. */
   taxPercent: number;
+  /** Highest discount a cashier can apply without an administrator PIN. */
+  discountLimitPercent: number;
   invoiceSeries: string;
   nextInvoiceNumber: number;
 }
@@ -16,6 +18,7 @@ export const DEMO_SESSION: PosSession = {
   cashierName: "Marvin Téllez",
   exchangeRate: 36.6243,
   taxPercent: 15,
+  discountLimitPercent: 5,
   invoiceSeries: "F001",
   nextInvoiceNumber: 482,
 };
