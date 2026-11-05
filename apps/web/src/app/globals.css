@@ -159,6 +159,12 @@
     border-radius: var(--radius-xs);
   }
 
+  /* Edge adds its own reveal button; PasswordInput already provides one. */
+  input::-ms-reveal,
+  input::-ms-clear {
+    display: none;
+  }
+
   ::selection {
     background: var(--amber-tint);
     color: var(--amber-ink);
@@ -185,6 +191,33 @@
 
   .press:active:not(:disabled) {
     transform: scale(0.97);
+  }
+}
+
+/* Side sheet slides in from the right and leaves the same way. */
+.sheet {
+  transform: translateX(0);
+  transition:
+    transform 240ms var(--ease-drawer),
+    overlay 240ms allow-discrete,
+    display 240ms allow-discrete;
+
+  @starting-style {
+    transform: translateX(100%);
+  }
+}
+
+.sheet:not([open]) {
+  transform: translateX(100%);
+  transition-duration: 180ms;
+}
+
+.sheet::backdrop {
+  opacity: 1;
+  transition: opacity 240ms ease;
+
+  @starting-style {
+    opacity: 0;
   }
 }
 
