@@ -13,7 +13,9 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"licoreria/api/internal/auditlog"
 	"licoreria/api/internal/auth"
+	"licoreria/api/internal/backups"
 	"licoreria/api/internal/cash"
 	"licoreria/api/internal/catalog"
 	"licoreria/api/internal/dashboard"
@@ -34,9 +36,10 @@ import (
 )
 
 type Deps struct {
-	Config config.Config
-	Logger *slog.Logger
-	DB     *pgxpool.Pool
+	Config  config.Config
+	Logger  *slog.Logger
+	DB      *pgxpool.Pool
+	Backups *backups.Service
 }
 
 func NewRouter(deps Deps) http.Handler {
@@ -73,27 +76,44 @@ func NewRouter(deps Deps) http.Handler {
 
 	r.Route("/api/v1", func(api chi.Router) {
 		health.NewHandler(deps.DB).Routes(api)
-		auth.NewHandler(authSvc, deps.Config.Auth.CookieSecure).Routes(api)
 
-		api.Group(func(protected chi.Router) {
-			protected.Use(auth.Authenticate(authSvc), auth.RequirePasswordChanged)
-			users.NewHandler(usersSvc).Routes(protected)
-			roles.NewHandler(roles.NewService(deps.DB)).Routes(protected)
-			catalog.NewHandler(catalog.NewService(deps.DB)).Routes(protected)
-			products.NewHandler(products.NewService(deps.DB, store)).Routes(protected)
-			parties.NewCustomerHandler(parties.NewCustomerService(deps.DB)).Routes(protected)
-			parties.NewSupplierHandler(parties.NewSupplierService(deps.DB)).Routes(protected)
-			inventory.NewHandler(inventory.NewService(deps.DB, ledger)).Routes(protected)
-			purchases.NewHandler(purchases.NewService(deps.DB, ledger)).Routes(protected)
-			rates.NewHandler(rates.NewService(deps.DB)).Routes(protected)
-			cash.NewHandler(cash.NewService(deps.DB, deps.Config.AppBaseURL)).Routes(protected)
-			sales.NewHandler(sales.NewService(deps.DB, ledger)).Routes(protected)
-			settings.NewHandler(deps.DB).Routes(protected)
-			reports.NewHandler(reports.NewService(deps.DB)).Routes(protected)
-			dashboard.NewHandler(deps.DB).Routes(protected)
+		api.Group(func(gated chi.Router) {
+			gated.Use(deps.Backups.Gate().Middleware)
+			auth.NewHandler(authSvc, deps.Config.Auth.CookieSecure).Routes(gated)
+
+			gated.Group(func(protected chi.Router) {
+				protected.Use(auth.Authenticate(authSvc), auth.RequirePasswordChanged)
+				users.NewHandler(usersSvc).Routes(protected)
+				roles.NewHandler(roles.NewService(deps.DB)).Routes(protected)
+				catalog.NewHandler(catalog.NewService(deps.DB)).Routes(protected)
+				products.NewHandler(products.NewService(deps.DB, store)).Routes(protected)
+				parties.NewCustomerHandler(parties.NewCustomerService(deps.DB)).Routes(protected)
+				parties.NewSupplierHandler(parties.NewSupplierService(deps.DB)).Routes(protected)
+				inventory.NewHandler(inventory.NewService(deps.DB, ledger)).Routes(protected)
+				purchases.NewHandler(purchases.NewService(deps.DB, ledger)).Routes(protected)
+				rates.NewHandler(rates.NewService(deps.DB)).Routes(protected)
+				cash.NewHandler(cash.NewService(deps.DB, deps.Config.AppBaseURL)).Routes(protected)
+				sales.NewHandler(sales.NewService(deps.DB, ledger)).Routes(protected)
+				settings.NewHandler(deps.DB).Routes(protected)
+				reports.NewHandler(reports.NewService(deps.DB)).Routes(protected)
+				dashboard.NewHandler(deps.DB).Routes(protected)
+				backups.NewHandler(deps.Backups).Routes(protected)
+				auditlog.NewHandler(deps.DB).Routes(protected)
+			})
 		})
 	})
 	return r
+}
+
+// NewBackups builds the backup service, with its private bucket when one is configured.
+func NewBackups(cfg config.Config, logger *slog.Logger, db *pgxpool.Pool) *backups.Service {
+	remote := storage.NewSupabase(storage.Config{
+		URL:        cfg.Storage.SupabaseURL,
+		ServiceKey: cfg.Storage.SupabaseServiceKey,
+		Bucket:     cfg.Storage.BackupBucket,
+		Timeout:    10 * time.Minute,
+	})
+	return backups.NewService(db, backups.Options{DatabaseURL: cfg.DatabaseURL, Dir: cfg.Storage.BackupDir, Remote: remote, Logger: logger})
 }
 
 // Run serves until ctx is cancelled, then drains in-flight requests.

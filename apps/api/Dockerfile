@@ -9,9 +9,11 @@ COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/api ./cmd/api
 
 FROM docker.io/library/alpine:3.22
-# postgresql16-client provides pg_dump/pg_restore for the backups module.
+# postgresql16-client provides pg_dump, pg_restore and psql for the backups module.
 RUN apk add --no-cache ca-certificates tzdata postgresql16-client \
-  && adduser -D -H -u 10001 app
+  && adduser -D -H -u 10001 app \
+  && mkdir -p -m 700 /var/lib/anejo/backups \
+  && chown -R app /var/lib/anejo
 
 ENV TZ=America/Managua \
     HTTP_ADDR=:8080

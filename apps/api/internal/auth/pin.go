@@ -29,19 +29,27 @@ var (
 	ErrAuthorizationLocked = apperr.New(apperr.KindTooManyRequests, "authorization_locked", "Demasiados intentos con ese usuario. Espera 15 minutos.")
 )
 
+// ConfirmPassword re-checks a signed-in user's password before a sensitive action.
+func ConfirmPassword(ctx context.Context, db database.DBTX, userID uuid.UUID, plain string) error {
+	hash, err := Repository{}.passwordHash(ctx, db, userID)
+	if err != nil {
+		return err
+	}
+	if ok, err := password.Verify(plain, hash); err != nil {
+		return fmt.Errorf("verify password: %w", err)
+	} else if !ok {
+		return ErrWrongPassword
+	}
+	return nil
+}
+
 // SetPIN stores the caller's authorization PIN after confirming their password.
 func (s *Service) SetPIN(ctx context.Context, p Principal, currentPassword, pin string) error {
 	if !pinPattern.MatchString(pin) {
 		return ErrInvalidPIN
 	}
-	hash, err := s.repo.passwordHash(ctx, s.pool, p.UserID)
-	if err != nil {
+	if err := ConfirmPassword(ctx, s.pool, p.UserID, currentPassword); err != nil {
 		return err
-	}
-	if ok, err := password.Verify(currentPassword, hash); err != nil {
-		return fmt.Errorf("verify password: %w", err)
-	} else if !ok {
-		return ErrWrongPassword
 	}
 	pinHash, err := password.Hash(pin)
 	if err != nil {

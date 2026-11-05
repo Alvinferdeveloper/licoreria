@@ -51,8 +51,10 @@ func run(args []string) error {
 		return createAdmin(cfg, args[1:])
 	case "seed-demo":
 		return seedDemo(cfg)
+	case "verify-backup":
+		return verifyBackup(cfg, logger)
 	default:
-		return fmt.Errorf("unknown command %q (use serve, migrate, create-admin or seed-demo)", command)
+		return fmt.Errorf("unknown command %q (use serve, migrate, create-admin, seed-demo or verify-backup)", command)
 	}
 }
 
@@ -76,8 +78,34 @@ func serve(cfg config.Config, logger *slog.Logger) error {
 	}
 	go mail.NewWorker(pool, sender, logger).Run(ctx)
 
-	router := server.NewRouter(server.Deps{Config: cfg, Logger: logger, DB: pool})
+	backupSvc := server.NewBackups(cfg, logger, pool)
+	go backupSvc.RunScheduler(ctx)
+
+	router := server.NewRouter(server.Deps{Config: cfg, Logger: logger, DB: pool, Backups: backupSvc})
 	return server.Run(ctx, cfg, logger, router)
+}
+
+// verifyBackup runs the restore drill on the newest backup and fails if it can't be loaded.
+func verifyBackup(cfg config.Config, logger *slog.Logger) error {
+	ctx := context.Background()
+	pool, err := database.Connect(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+
+	backup, result, err := server.NewBackups(cfg, logger, pool).VerifyLatest(ctx)
+	if err != nil {
+		return err
+	}
+	if !result.OK {
+		return fmt.Errorf("el respaldo %s no pasó la verificación", backup.FileName)
+	}
+	fmt.Printf("Respaldo %s verificado (esquema %d).\n", backup.FileName, result.SchemaVersion)
+	for _, table := range result.Tables {
+		fmt.Printf("  %-22s %d\n", table.Table, table.Rows)
+	}
+	return nil
 }
 
 // seedDemo loads the demo catalog, customers and suppliers once.

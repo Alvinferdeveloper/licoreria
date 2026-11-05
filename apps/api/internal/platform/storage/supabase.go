@@ -21,11 +21,13 @@ type Config struct {
 	URL        string
 	ServiceKey string
 	Bucket     string
+	// Timeout bounds each request; zero means 30 seconds.
+	Timeout time.Duration
 }
 
 func (c Config) Enabled() bool { return c.URL != "" && c.ServiceKey != "" && c.Bucket != "" }
 
-// Supabase stores objects in a public bucket and returns their public URL.
+// Supabase stores objects in a bucket; PublicURL only works when that bucket is public.
 type Supabase struct {
 	cfg    Config
 	client *http.Client
@@ -33,7 +35,10 @@ type Supabase struct {
 
 func NewSupabase(cfg Config) *Supabase {
 	cfg.URL = strings.TrimRight(cfg.URL, "/")
-	return &Supabase{cfg: cfg, client: &http.Client{Timeout: 30 * time.Second}}
+	if cfg.Timeout == 0 {
+		cfg.Timeout = 30 * time.Second
+	}
+	return &Supabase{cfg: cfg, client: &http.Client{Timeout: cfg.Timeout}}
 }
 
 func (s *Supabase) Enabled() bool { return s.cfg.Enabled() }
@@ -56,6 +61,27 @@ func (s *Supabase) Put(ctx context.Context, key, contentType string, data []byte
 		return "", fmt.Errorf("upload %s: %w", key, err)
 	}
 	return s.PublicURL(key), nil
+}
+
+// Get downloads the object at key with the service key, so it also reads private buckets.
+func (s *Supabase) Get(ctx context.Context, key string) (io.ReadCloser, error) {
+	if !s.Enabled() {
+		return nil, ErrNotConfigured
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.objectURL(key), nil)
+	if err != nil {
+		return nil, err
+	}
+	s.authorize(req)
+	res, err := s.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("download %s: %w", key, err)
+	}
+	if res.StatusCode >= 300 {
+		res.Body.Close()
+		return nil, fmt.Errorf("download %s: supabase storage status %d", key, res.StatusCode)
+	}
+	return res.Body, nil
 }
 
 // Delete removes the object at key; a missing object is not an error.

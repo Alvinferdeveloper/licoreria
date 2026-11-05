@@ -42,6 +42,9 @@ services:
       SUPABASE_URL: ${SUPABASE_URL:-}
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
       SUPABASE_BUCKET: ${SUPABASE_BUCKET:-productos}
+      SUPABASE_BACKUP_BUCKET: ${SUPABASE_BACKUP_BUCKET:-}
+    volumes:
+      - backup-data:/var/lib/anejo/backups
     ports:
       - "${API_PORT:-8080}:8080"
     depends_on:
@@ -66,3 +69,4 @@ services:
 
 volumes:
   db-data:
+  backup-data:

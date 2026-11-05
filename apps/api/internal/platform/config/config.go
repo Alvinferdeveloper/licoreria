@@ -29,10 +29,13 @@ type Config struct {
 }
 
 // StorageConfig points at Supabase Storage; when empty, image uploads are disabled.
+// BackupBucket must be private; when empty, backups stay only in BackupDir.
 type StorageConfig struct {
 	SupabaseURL        string
 	SupabaseServiceKey string
 	Bucket             string
+	BackupBucket       string
+	BackupDir          string
 }
 
 type AuthConfig struct {
@@ -85,6 +88,8 @@ func Load() (Config, error) {
 			SupabaseURL:        os.Getenv("SUPABASE_URL"),
 			SupabaseServiceKey: os.Getenv("SUPABASE_SERVICE_KEY"),
 			Bucket:             getEnv("SUPABASE_BUCKET", "productos"),
+			BackupBucket:       os.Getenv("SUPABASE_BACKUP_BUCKET"),
+			BackupDir:          getEnv("BACKUP_DIR", "/var/lib/anejo/backups"),
 		},
 	}
 
@@ -111,6 +116,9 @@ func Load() (Config, error) {
 		if u, err := url.Parse(cfg.Storage.SupabaseURL); err != nil || u.Scheme != "https" {
 			errs = append(errs, errors.New("SUPABASE_URL must be an https URL like https://<project>.supabase.co"))
 		}
+	}
+	if cfg.Storage.BackupBucket != "" && cfg.Storage.BackupBucket == cfg.Storage.Bucket {
+		errs = append(errs, errors.New("SUPABASE_BACKUP_BUCKET must be a private bucket, not the public SUPABASE_BUCKET"))
 	}
 	if production && !cfg.Auth.CookieSecure {
 		errs = append(errs, errors.New("COOKIE_SECURE cannot be false in production"))

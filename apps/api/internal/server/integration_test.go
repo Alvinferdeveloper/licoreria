@@ -61,6 +61,8 @@ func newTestEnv(t *testing.T) *testEnv {
 
 	cfg := config.Config{
 		Env:            "test",
+		DatabaseURL:    url,
+		Storage:        config.StorageConfig{BackupDir: t.TempDir()},
 		AllowedOrigins: []string{"http://localhost:3000"},
 		AppBaseURL:     "http://localhost:3000",
 		Auth: config.AuthConfig{
@@ -71,7 +73,7 @@ func newTestEnv(t *testing.T) *testEnv {
 		},
 	}
 	logger := slog.New(slog.NewTextHandler(testLogWriter{t}, nil))
-	server := httptest.NewServer(NewRouter(Deps{Config: cfg, Logger: logger, DB: pool}))
+	server := httptest.NewServer(NewRouter(Deps{Config: cfg, Logger: logger, DB: pool, Backups: NewBackups(cfg, logger, pool)}))
 	t.Cleanup(func() {
 		server.Close()
 		pool.Close()
