@@ -45,6 +45,8 @@ podman compose up -d --build   # o: docker compose up -d --build
 curl http://localhost:8080/api/v1/health
 ```
 
+La documentación interactiva de la API queda en http://localhost:8080/api/v1/docs (contrato en `apps/api/openapi.yaml`).
+
 **Desarrollo** (base de datos en contenedor, API y web en local):
 
 ```bash

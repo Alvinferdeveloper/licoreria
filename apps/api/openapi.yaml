@@ -1,0 +1,1734 @@
+openapi: 3.1.0
+info:
+  title: Añejo API
+  version: 1.0.0
+  description: |
+    API REST del sistema de inventario y facturación de la licorería.
+
+    **Autenticación:** `POST /auth/login` devuelve `accessToken`. Envíalo como `Authorization: Bearer <token>`
+    (en esta página, con el botón *Authorize*). El refresh viaja en una cookie HttpOnly.
+
+    **Convenciones:** los montos son strings decimales (`"1250.50"`), nunca números. Las fechas van en ISO 8601
+    y los filtros `from` y `to` son días en hora de Managua. Las listas paginadas responden
+    `{"data": [...], "meta": {"page", "pageSize", "total"}}`.
+
+    **Errores:** todo error usa el mismo sobre. El campo `code` es estable y `message` está en español, listo
+    para mostrarse. Una validación fallida responde 422 con los campos en `details.fields`.
+
+    **Permisos:** cada operación indica el permiso `módulo:acción` que exige. Sin él responde 403.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+tags:
+  - name: Sistema
+  - name: Autenticación
+  - name: Usuarios y roles
+  - name: Catálogo
+  - name: Clientes y proveedores
+  - name: Inventario
+  - name: Compras
+  - name: Tipo de cambio
+  - name: Caja
+  - name: Ventas
+  - name: Reportes
+  - name: Configuración
+  - name: Respaldos
+paths:
+  /health:
+    get:
+      tags: [Sistema]
+      summary: Estado del servicio y de la base de datos
+      security: []
+      responses:
+        '200':
+          description: En servicio
+          content: { application/json: { schema: { $ref: '#/components/schemas/Health' } } }
+        '503':
+          description: La base de datos no responde
+          content: { application/json: { schema: { $ref: '#/components/schemas/Health' } } }
+  /auth/login:
+    post:
+      tags: [Autenticación]
+      summary: Iniciar sesión
+      description: Bloquea la cuenta tras varios intentos fallidos. Devuelve el token y deja el refresh en una cookie.
+      security: []
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/LoginRequest' } } }
+      responses:
+        '200': { $ref: '#/components/responses/Session' }
+        default: { $ref: '#/components/responses/Error' }
+  /auth/refresh:
+    post:
+      tags: [Autenticación]
+      summary: Renovar el token con la cookie de refresh
+      security: []
+      responses:
+        '200': { $ref: '#/components/responses/Session' }
+        default: { $ref: '#/components/responses/Error' }
+  /auth/logout:
+    post:
+      tags: [Autenticación]
+      summary: Cerrar la sesión actual
+      security: []
+      responses:
+        '204': { description: Sesión cerrada }
+        default: { $ref: '#/components/responses/Error' }
+  /auth/me:
+    get:
+      tags: [Autenticación]
+      summary: Usuario de la sesión con sus permisos
+      responses:
+        '200':
+          description: Usuario actual
+          content: { application/json: { schema: { $ref: '#/components/schemas/Principal' } } }
+        default: { $ref: '#/components/responses/Error' }
+  /auth/change-password:
+    post:
+      tags: [Autenticación]
+      summary: Cambiar la contraseña propia
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ChangePasswordRequest' } } }
+      responses:
+        '204': { description: Contraseña cambiada }
+        default: { $ref: '#/components/responses/Error' }
+  /auth/pin:
+    post:
+      tags: [Autenticación]
+      summary: Definir el PIN de autorización propio
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/SetPinRequest' } } }
+      responses:
+        '204': { description: PIN guardado }
+        default: { $ref: '#/components/responses/Error' }
+  /auth/forgot-password:
+    post:
+      tags: [Autenticación]
+      summary: Pedir el correo de recuperación
+      description: Responde igual exista o no la cuenta, para no revelar qué correos están registrados.
+      security: []
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [email], properties: { email: { type: string, format: email, maxLength: 254 } } } } }
+      responses:
+        '202':
+          description: Solicitud aceptada
+          content: { application/json: { schema: { type: object, additionalProperties: { type: string } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /auth/reset-password:
+    post:
+      tags: [Autenticación]
+      summary: Restablecer la contraseña con el token del correo
+      security: []
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ResetPasswordRequest' } } }
+      responses:
+        '204': { description: Contraseña restablecida }
+        default: { $ref: '#/components/responses/Error' }
+  /users:
+    get:
+      tags: [Usuarios y roles]
+      summary: Listar usuarios
+      description: 'Permiso: `users:view`.'
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/Search' }
+        - { $ref: '#/components/parameters/Active' }
+        - { name: roleId, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Página de usuarios
+          content: { application/json: { schema: { $ref: '#/components/schemas/UserPage' } } }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Usuarios y roles]
+      summary: Crear un usuario
+      description: 'Permiso: `users:create`. Envía por correo una contraseña temporal que debe cambiar al entrar.'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/UserInput' } } }
+      responses:
+        '201': { $ref: '#/components/responses/User' }
+        default: { $ref: '#/components/responses/Error' }
+  /users/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Usuarios y roles]
+      summary: Ver un usuario
+      description: 'Permiso: `users:view`.'
+      responses:
+        '200': { $ref: '#/components/responses/User' }
+        default: { $ref: '#/components/responses/Error' }
+    put:
+      tags: [Usuarios y roles]
+      summary: Editar un usuario
+      description: 'Permiso: `users:update`.'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/UserInput' } } }
+      responses:
+        '200': { $ref: '#/components/responses/User' }
+        default: { $ref: '#/components/responses/Error' }
+  /users/{id}/status:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    patch:
+      tags: [Usuarios y roles]
+      summary: Activar o desactivar un usuario
+      description: 'Permiso: `users:delete`.'
+      requestBody: { $ref: '#/components/requestBodies/Status' }
+      responses:
+        '200': { $ref: '#/components/responses/User' }
+        default: { $ref: '#/components/responses/Error' }
+  /users/{id}/resend-access:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Usuarios y roles]
+      summary: Reenviar el acceso con una contraseña temporal nueva
+      description: 'Permiso: `users:update`.'
+      responses:
+        '204': { description: Correo encolado }
+        default: { $ref: '#/components/responses/Error' }
+  /roles:
+    get:
+      tags: [Usuarios y roles]
+      summary: Listar roles
+      description: 'Permiso: `roles:view`.'
+      responses:
+        '200':
+          description: Roles
+          content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/Role' } } } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /roles/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Usuarios y roles]
+      summary: Ver un rol
+      description: 'Permiso: `roles:view`.'
+      responses:
+        '200': { $ref: '#/components/responses/Role' }
+        default: { $ref: '#/components/responses/Error' }
+  /roles/{id}/permissions:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    put:
+      tags: [Usuarios y roles]
+      summary: Reemplazar los permisos de un rol
+      description: 'Permiso: `roles:update`. Aplica desde la siguiente petición de cada usuario.'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [permissions], properties: { permissions: { type: array, items: { type: string, examples: ['products:view'] } } } } } }
+      responses:
+        '200': { $ref: '#/components/responses/Role' }
+        default: { $ref: '#/components/responses/Error' }
+  /permissions:
+    get:
+      tags: [Usuarios y roles]
+      summary: Catálogo de permisos
+      description: 'Permiso: `roles:view`.'
+      responses:
+        '200':
+          description: Permisos
+          content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/Permission' } } } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /categories:
+    get:
+      tags: [Catálogo]
+      summary: Listar categorías
+      description: 'Permiso: `categories:view`.'
+      responses:
+        '200': { $ref: '#/components/responses/MasterList' }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Catálogo]
+      summary: Crear una categoría
+      description: 'Permiso: `categories:create`.'
+      requestBody: { $ref: '#/components/requestBodies/Master' }
+      responses:
+        '201': { $ref: '#/components/responses/Master' }
+        default: { $ref: '#/components/responses/Error' }
+  /categories/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    put:
+      tags: [Catálogo]
+      summary: Editar una categoría
+      description: 'Permiso: `categories:update`.'
+      requestBody: { $ref: '#/components/requestBodies/Master' }
+      responses:
+        '200': { $ref: '#/components/responses/Master' }
+        default: { $ref: '#/components/responses/Error' }
+  /categories/{id}/status:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    patch:
+      tags: [Catálogo]
+      summary: Activar o desactivar una categoría
+      description: 'Permiso: `categories:delete`.'
+      requestBody: { $ref: '#/components/requestBodies/Status' }
+      responses:
+        '200': { $ref: '#/components/responses/Master' }
+        default: { $ref: '#/components/responses/Error' }
+  /brands:
+    get:
+      tags: [Catálogo]
+      summary: Listar marcas
+      description: 'Permiso: `categories:view`.'
+      responses:
+        '200': { $ref: '#/components/responses/MasterList' }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Catálogo]
+      summary: Crear una marca
+      description: 'Permiso: `categories:create`.'
+      requestBody: { $ref: '#/components/requestBodies/Master' }
+      responses:
+        '201': { $ref: '#/components/responses/Master' }
+        default: { $ref: '#/components/responses/Error' }
+  /brands/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    put:
+      tags: [Catálogo]
+      summary: Editar una marca
+      description: 'Permiso: `categories:update`.'
+      requestBody: { $ref: '#/components/requestBodies/Master' }
+      responses:
+        '200': { $ref: '#/components/responses/Master' }
+        default: { $ref: '#/components/responses/Error' }
+  /brands/{id}/status:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    patch:
+      tags: [Catálogo]
+      summary: Activar o desactivar una marca
+      description: 'Permiso: `categories:delete`.'
+      requestBody: { $ref: '#/components/requestBodies/Status' }
+      responses:
+        '200': { $ref: '#/components/responses/Master' }
+        default: { $ref: '#/components/responses/Error' }
+  /units:
+    get:
+      tags: [Catálogo]
+      summary: Listar unidades de medida
+      description: 'Permiso: `categories:view`.'
+      responses:
+        '200': { $ref: '#/components/responses/MasterList' }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Catálogo]
+      summary: Crear una unidad de medida
+      description: 'Permiso: `categories:create`.'
+      requestBody: { $ref: '#/components/requestBodies/Master' }
+      responses:
+        '201': { $ref: '#/components/responses/Master' }
+        default: { $ref: '#/components/responses/Error' }
+  /units/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    put:
+      tags: [Catálogo]
+      summary: Editar una unidad de medida
+      description: 'Permiso: `categories:update`.'
+      requestBody: { $ref: '#/components/requestBodies/Master' }
+      responses:
+        '200': { $ref: '#/components/responses/Master' }
+        default: { $ref: '#/components/responses/Error' }
+  /products:
+    get:
+      tags: [Catálogo]
+      summary: Listar y buscar productos
+      description: 'Permiso: `products:view`. La búsqueda ignora acentos. `averageCost` solo llega con `products:authorize`.'
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/Search' }
+        - { $ref: '#/components/parameters/Active' }
+        - { name: categoryId, in: query, schema: { type: string, format: uuid } }
+        - { name: brandId, in: query, schema: { type: string, format: uuid } }
+        - { name: lowStock, in: query, schema: { type: boolean } }
+      responses:
+        '200':
+          description: Página de productos
+          content: { application/json: { schema: { $ref: '#/components/schemas/ProductPage' } } }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Catálogo]
+      summary: Crear un producto
+      description: 'Permisos: `products:create` y `products:authorize`. Sin `taxPercent` toma el IVA configurado.'
+      requestBody: { $ref: '#/components/requestBodies/Product' }
+      responses:
+        '201': { $ref: '#/components/responses/Product' }
+        default: { $ref: '#/components/responses/Error' }
+  /products/lookup:
+    get:
+      tags: [Catálogo]
+      summary: Buscar por código de barras o SKU
+      description: 'Permiso: `products:view`. Si el código es de una presentación, la devuelve en `presentationId`.'
+      parameters:
+        - { name: code, in: query, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Producto encontrado
+          content: { application/json: { schema: { type: object, properties: { product: { $ref: '#/components/schemas/Product' }, presentationId: { type: [string, 'null'], format: uuid } } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /products/import:
+    post:
+      tags: [Catálogo]
+      summary: Importar productos desde Excel o CSV
+      description: 'Permisos: `products:create` y `products:authorize`. Con `dryRun=true` solo devuelve la vista previa. Importa únicamente las filas válidas.'
+      parameters:
+        - { name: dryRun, in: query, schema: { type: boolean } }
+      requestBody:
+        required: true
+        content: { multipart/form-data: { schema: { type: object, required: [file], properties: { file: { type: string, format: binary } } } } }
+      responses:
+        '200':
+          description: Resultado por fila
+          content: { application/json: { schema: { $ref: '#/components/schemas/ImportReport' } } }
+        default: { $ref: '#/components/responses/Error' }
+  /products/import/template:
+    get:
+      tags: [Catálogo]
+      summary: Descargar la plantilla de importación
+      description: 'Permiso: `products:create`.'
+      responses:
+        '200':
+          description: Archivo xlsx
+          content: { application/vnd.openxmlformats-officedocument.spreadsheetml.sheet: { schema: { type: string, format: binary } } }
+        default: { $ref: '#/components/responses/Error' }
+  /products/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Catálogo]
+      summary: Ver un producto
+      description: 'Permiso: `products:view`.'
+      responses:
+        '200': { $ref: '#/components/responses/Product' }
+        default: { $ref: '#/components/responses/Error' }
+    put:
+      tags: [Catálogo]
+      summary: Editar un producto
+      description: 'Permiso: `products:update`. Cambiar precio o IVA exige además `products:authorize`.'
+      requestBody: { $ref: '#/components/requestBodies/Product' }
+      responses:
+        '200': { $ref: '#/components/responses/Product' }
+        default: { $ref: '#/components/responses/Error' }
+  /products/{id}/status:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    patch:
+      tags: [Catálogo]
+      summary: Activar o desactivar un producto
+      description: 'Permiso: `products:delete`.'
+      requestBody: { $ref: '#/components/requestBodies/Status' }
+      responses:
+        '200': { $ref: '#/components/responses/Product' }
+        default: { $ref: '#/components/responses/Error' }
+  /products/{id}/image:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Catálogo]
+      summary: Subir la imagen de un producto
+      description: 'Permiso: `products:update`. Se guarda en Supabase Storage; sin credenciales responde `storage_not_configured`.'
+      requestBody:
+        required: true
+        content: { multipart/form-data: { schema: { type: object, required: [image], properties: { image: { type: string, format: binary } } } } }
+      responses:
+        '200': { $ref: '#/components/responses/Product' }
+        default: { $ref: '#/components/responses/Error' }
+    delete:
+      tags: [Catálogo]
+      summary: Quitar la imagen de un producto
+      description: 'Permiso: `products:update`.'
+      responses:
+        '200': { $ref: '#/components/responses/Product' }
+        default: { $ref: '#/components/responses/Error' }
+  /customers:
+    get:
+      tags: [Clientes y proveedores]
+      summary: Listar clientes
+      description: 'Permiso: `customers:view`.'
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/Search' }
+        - { $ref: '#/components/parameters/Active' }
+      responses:
+        '200':
+          description: Página de clientes
+          content: { application/json: { schema: { $ref: '#/components/schemas/CustomerPage' } } }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Clientes y proveedores]
+      summary: Crear un cliente
+      description: 'Permiso: `customers:create`.'
+      requestBody: { $ref: '#/components/requestBodies/Customer' }
+      responses:
+        '201': { $ref: '#/components/responses/Customer' }
+        default: { $ref: '#/components/responses/Error' }
+  /customers/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Clientes y proveedores]
+      summary: Ver un cliente
+      description: 'Permiso: `customers:view`.'
+      responses:
+        '200': { $ref: '#/components/responses/Customer' }
+        default: { $ref: '#/components/responses/Error' }
+    put:
+      tags: [Clientes y proveedores]
+      summary: Editar un cliente
+      description: 'Permiso: `customers:update`. Consumidor final no se puede modificar.'
+      requestBody: { $ref: '#/components/requestBodies/Customer' }
+      responses:
+        '200': { $ref: '#/components/responses/Customer' }
+        default: { $ref: '#/components/responses/Error' }
+  /customers/{id}/status:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    patch:
+      tags: [Clientes y proveedores]
+      summary: Activar o desactivar un cliente
+      description: 'Permiso: `customers:delete`.'
+      requestBody: { $ref: '#/components/requestBodies/Status' }
+      responses:
+        '200': { $ref: '#/components/responses/Customer' }
+        default: { $ref: '#/components/responses/Error' }
+  /suppliers:
+    get:
+      tags: [Clientes y proveedores]
+      summary: Listar proveedores
+      description: 'Permiso: `suppliers:view`.'
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/Search' }
+        - { $ref: '#/components/parameters/Active' }
+      responses:
+        '200':
+          description: Página de proveedores
+          content: { application/json: { schema: { $ref: '#/components/schemas/SupplierPage' } } }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Clientes y proveedores]
+      summary: Crear un proveedor
+      description: 'Permiso: `suppliers:create`.'
+      requestBody: { $ref: '#/components/requestBodies/Supplier' }
+      responses:
+        '201': { $ref: '#/components/responses/Supplier' }
+        default: { $ref: '#/components/responses/Error' }
+  /suppliers/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Clientes y proveedores]
+      summary: Ver un proveedor
+      description: 'Permiso: `suppliers:view`.'
+      responses:
+        '200': { $ref: '#/components/responses/Supplier' }
+        default: { $ref: '#/components/responses/Error' }
+    put:
+      tags: [Clientes y proveedores]
+      summary: Editar un proveedor
+      description: 'Permiso: `suppliers:update`.'
+      requestBody: { $ref: '#/components/requestBodies/Supplier' }
+      responses:
+        '200': { $ref: '#/components/responses/Supplier' }
+        default: { $ref: '#/components/responses/Error' }
+  /suppliers/{id}/status:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    patch:
+      tags: [Clientes y proveedores]
+      summary: Activar o desactivar un proveedor
+      description: 'Permiso: `suppliers:delete`.'
+      requestBody: { $ref: '#/components/requestBodies/Status' }
+      responses:
+        '200': { $ref: '#/components/responses/Supplier' }
+        default: { $ref: '#/components/responses/Error' }
+  /inventory/movements:
+    get:
+      tags: [Inventario]
+      summary: Kardex
+      description: 'Permiso: `inventory:view`. El stock es la suma de estos movimientos, que nunca se editan.'
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { name: productId, in: query, schema: { type: string, format: uuid } }
+        - { name: type, in: query, schema: { type: string, enum: [purchase, sale, sale_void, customer_return, supplier_return, count_adjustment, shrinkage] } }
+      responses:
+        '200':
+          description: Página de movimientos
+          content: { application/json: { schema: { $ref: '#/components/schemas/InventoryMovementPage' } } }
+        default: { $ref: '#/components/responses/Error' }
+  /inventory/alerts:
+    get:
+      tags: [Inventario]
+      summary: Productos por pedir
+      description: 'Permiso: `inventory:view`. Stock en o bajo el mayor entre mínimo y punto de reorden.'
+      responses:
+        '200':
+          description: Alertas
+          content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/StockAlert' } } } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /inventory/adjustments:
+    post:
+      tags: [Inventario]
+      summary: Registrar un ajuste de inventario
+      description: 'Permiso: `inventory:create`. `count`: unidades contadas. `shrinkage`: unidades perdidas.'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/AdjustmentInput' } } }
+      responses:
+        '201':
+          description: Stock resultante
+          content: { application/json: { schema: { type: object, properties: { stock: { type: integer } } } } }
+        default: { $ref: '#/components/responses/Error' }
+  /purchases:
+    get:
+      tags: [Compras]
+      summary: Listar compras
+      description: 'Permiso: `purchases:view`.'
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/Search' }
+        - { name: status, in: query, schema: { type: string, enum: [draft, received, voided] } }
+        - { name: supplierId, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Página de compras
+          content: { application/json: { schema: { $ref: '#/components/schemas/PurchasePage' } } }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Compras]
+      summary: Crear una compra en borrador
+      description: 'Permiso: `purchases:create`.'
+      requestBody: { $ref: '#/components/requestBodies/Purchase' }
+      responses:
+        '201': { $ref: '#/components/responses/Purchase' }
+        default: { $ref: '#/components/responses/Error' }
+  /purchases/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Compras]
+      summary: Ver una compra
+      description: 'Permiso: `purchases:view`.'
+      responses:
+        '200': { $ref: '#/components/responses/Purchase' }
+        default: { $ref: '#/components/responses/Error' }
+    put:
+      tags: [Compras]
+      summary: Editar un borrador
+      description: 'Permiso: `purchases:update`.'
+      requestBody: { $ref: '#/components/requestBodies/Purchase' }
+      responses:
+        '200': { $ref: '#/components/responses/Purchase' }
+        default: { $ref: '#/components/responses/Error' }
+  /purchases/{id}/receive:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Compras]
+      summary: Recibir una compra
+      description: 'Permiso: `purchases:update`. Suma el stock y actualiza el costo promedio.'
+      responses:
+        '200': { $ref: '#/components/responses/Purchase' }
+        default: { $ref: '#/components/responses/Error' }
+  /purchases/{id}/void:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Compras]
+      summary: Anular una compra
+      description: 'Permiso: `purchases:void`. Si ya se recibió, revierte el stock; falla si ese stock ya se usó.'
+      requestBody: { $ref: '#/components/requestBodies/Reason' }
+      responses:
+        '200': { $ref: '#/components/responses/Purchase' }
+        default: { $ref: '#/components/responses/Error' }
+  /exchange-rates:
+    get:
+      tags: [Tipo de cambio]
+      summary: Historial de tasas
+      description: 'Permiso: `exchange_rates:view`.'
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+      responses:
+        '200':
+          description: Página de tasas
+          content: { application/json: { schema: { $ref: '#/components/schemas/RatePage' } } }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Tipo de cambio]
+      summary: Registrar o corregir una tasa
+      description: 'Permiso: `exchange_rates:create`. Solo hoy o fechas futuras; sin `date` aplica a hoy.'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [rate], properties: { rate: { type: string, examples: ['36.6243'] }, date: { type: [string, 'null'], format: date } } } } }
+      responses:
+        '200': { $ref: '#/components/responses/Rate' }
+        default: { $ref: '#/components/responses/Error' }
+  /exchange-rates/today:
+    get:
+      tags: [Tipo de cambio]
+      summary: Tasa de hoy
+      description: 'Permiso: `exchange_rates:view`. Sin tasa responde 404 `exchange_rate_missing`.'
+      responses:
+        '200': { $ref: '#/components/responses/Rate' }
+        default: { $ref: '#/components/responses/Error' }
+  /registers:
+    get:
+      tags: [Caja]
+      summary: Listar cajas
+      description: 'Permiso: `cash_shifts:view`.'
+      responses:
+        '200': { $ref: '#/components/responses/RegisterList' }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Caja]
+      summary: Crear una caja
+      description: 'Permiso: `settings:update`. Responde la lista completa.'
+      requestBody: { $ref: '#/components/requestBodies/Register' }
+      responses:
+        '200': { $ref: '#/components/responses/RegisterList' }
+        default: { $ref: '#/components/responses/Error' }
+  /registers/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    put:
+      tags: [Caja]
+      summary: Editar una caja
+      description: 'Permiso: `settings:update`. La serie se bloquea tras emitir la primera factura.'
+      requestBody: { $ref: '#/components/requestBodies/Register' }
+      responses:
+        '200': { $ref: '#/components/responses/RegisterList' }
+        default: { $ref: '#/components/responses/Error' }
+  /cash-shifts:
+    get:
+      tags: [Caja]
+      summary: Historial de turnos
+      description: 'Permiso: `cash_shifts:view`. El cajero solo ve los suyos.'
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { name: status, in: query, schema: { type: string, enum: [open, closed] } }
+        - { name: registerId, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Página de turnos
+          content: { application/json: { schema: { $ref: '#/components/schemas/ShiftPage' } } }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Caja]
+      summary: Abrir un turno
+      description: 'Permiso: `cash_shifts:create`.'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/OpenShiftInput' } } }
+      responses:
+        '201': { $ref: '#/components/responses/Shift' }
+        default: { $ref: '#/components/responses/Error' }
+  /cash-shifts/current:
+    get:
+      tags: [Caja]
+      summary: Turno abierto del usuario
+      description: 'Permiso: `cash_shifts:view`. Sin turno responde 404 `no_open_shift`.'
+      responses:
+        '200': { $ref: '#/components/responses/Shift' }
+        default: { $ref: '#/components/responses/Error' }
+  /cash-shifts/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Caja]
+      summary: Ver un turno con su arqueo
+      description: 'Permiso: `cash_shifts:view`.'
+      responses:
+        '200': { $ref: '#/components/responses/Shift' }
+        default: { $ref: '#/components/responses/Error' }
+  /cash-shifts/{id}/movements:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Caja]
+      summary: Registrar una entrada o salida de efectivo
+      description: 'Permiso: `cash_shifts:update`. Una salida no puede superar el efectivo disponible.'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CashMovementInput' } } }
+      responses:
+        '201': { $ref: '#/components/responses/Shift' }
+        default: { $ref: '#/components/responses/Error' }
+  /cash-shifts/{id}/close:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Caja]
+      summary: Cerrar un turno con el conteo
+      description: 'Permiso: `cash_shifts:update`. Una diferencia avisa por correo a los supervisores.'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/CloseShiftInput' } } }
+      responses:
+        '200': { $ref: '#/components/responses/Shift' }
+        default: { $ref: '#/components/responses/Error' }
+  /sales:
+    get:
+      tags: [Ventas]
+      summary: Listar ventas
+      description: 'Permiso: `sales:view`. El cajero solo ve las suyas.'
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/Search' }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { name: status, in: query, schema: { type: string, enum: [completed, voided] } }
+        - { name: shiftId, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Página de ventas
+          content: { application/json: { schema: { $ref: '#/components/schemas/SalePage' } } }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Ventas]
+      summary: Registrar una venta
+      description: |
+        Permiso: `pos:create`. Exige caja abierta y tasa del día. Precios, costo e IVA salen del catálogo, nunca del
+        cliente. Venta, pagos y stock se guardan en una sola transacción.
+
+        Repetir la misma `Idempotency-Key` devuelve 200 con la venta original, sin cobrar dos veces. Un descuento sobre
+        el límite responde 403 `authorization_required` hasta enviar `authorization`.
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/SaleInput' } } }
+      responses:
+        '201': { $ref: '#/components/responses/Sale' }
+        '200': { $ref: '#/components/responses/Sale' }
+        default: { $ref: '#/components/responses/Error' }
+  /sales/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Ventas]
+      summary: Ver una venta con líneas y pagos
+      description: 'Permiso: `sales:view`.'
+      responses:
+        '200': { $ref: '#/components/responses/Sale' }
+        default: { $ref: '#/components/responses/Error' }
+  /sales/{id}/void:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Ventas]
+      summary: Anular una venta
+      description: 'Permiso: `sales:view`. Sin `sales:void` exige el PIN de quien lo tenga en `authorization`. Solo con el turno abierto; devuelve el stock.'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [reason], properties: { reason: { type: string, minLength: 3, maxLength: 300 }, authorization: { $ref: '#/components/schemas/Authorization' } } } } }
+      responses:
+        '200': { $ref: '#/components/responses/Sale' }
+        default: { $ref: '#/components/responses/Error' }
+  /sales/{id}/invoice.pdf:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Ventas]
+      summary: Factura detallada en PDF
+      description: 'Permiso: `sales:view`.'
+      responses:
+        '200':
+          description: PDF
+          content: { application/pdf: { schema: { type: string, format: binary } } }
+        default: { $ref: '#/components/responses/Error' }
+  /sales/{id}/email:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Ventas]
+      summary: Enviar la factura por correo
+      description: 'Permiso: `sales:view`. Se envía en segundo plano.'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [email], properties: { email: { type: string, format: email, maxLength: 254 } } } } }
+      responses:
+        '204': { description: Correo encolado }
+        default: { $ref: '#/components/responses/Error' }
+  /dashboard:
+    get:
+      tags: [Reportes]
+      summary: KPIs y datos de los gráficos del panel
+      description: 'Permiso: `dashboard:view`. Para un cajero, `scope` es `self` y solo cuenta sus ventas.'
+      responses:
+        '200':
+          description: Panel
+          content: { application/json: { schema: { $ref: '#/components/schemas/Dashboard' } } }
+        default: { $ref: '#/components/responses/Error' }
+  /reports:
+    get:
+      tags: [Reportes]
+      summary: Catálogo de reportes disponibles
+      description: 'Permiso: `reports:view`. Incluye filtros y columnas de cada reporte, según los permisos del usuario.'
+      responses:
+        '200':
+          description: Catálogo
+          content: { application/json: { schema: { type: object } } }
+        default: { $ref: '#/components/responses/Error' }
+  /reports/{key}:
+    parameters:
+      - { name: key, in: path, required: true, schema: { type: string } }
+    get:
+      tags: [Reportes]
+      summary: Ejecutar o exportar un reporte
+      description: 'Permiso: `reports:view`. Los filtros de cada reporte salen de `GET /reports`. Vista previa de 1000 filas; exportación de hasta 20000.'
+      parameters:
+        - { name: format, in: query, schema: { type: string, enum: [json, xlsx, pdf], default: json } }
+        - { name: filters, in: query, style: form, explode: true, schema: { type: object, additionalProperties: { type: string } } }
+      responses:
+        '200':
+          description: Resultado
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/ReportResult' } }
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet: { schema: { type: string, format: binary } }
+            application/pdf: { schema: { type: string, format: binary } }
+        default: { $ref: '#/components/responses/Error' }
+  /audit-log:
+    get:
+      tags: [Reportes]
+      summary: Bitácora de acciones
+      description: 'Permiso: `audit:view`.'
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+        - { $ref: '#/components/parameters/Search' }
+        - { $ref: '#/components/parameters/From' }
+        - { $ref: '#/components/parameters/To' }
+        - { name: module, in: query, schema: { type: string } }
+      responses:
+        '200':
+          description: Página de la bitácora
+          content: { application/json: { schema: { $ref: '#/components/schemas/AuditPage' } } }
+        default: { $ref: '#/components/responses/Error' }
+  /settings:
+    get:
+      tags: [Configuración]
+      summary: Ver la configuración
+      description: 'Permiso: `settings:view`.'
+      responses:
+        '200': { $ref: '#/components/responses/Settings' }
+        default: { $ref: '#/components/responses/Error' }
+    put:
+      tags: [Configuración]
+      summary: Guardar la configuración
+      description: 'Permiso: `settings:update`. El logo tiene su propia operación.'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/SettingsInput' } } }
+      responses:
+        '200': { $ref: '#/components/responses/Settings' }
+        default: { $ref: '#/components/responses/Error' }
+  /settings/store:
+    get:
+      tags: [Configuración]
+      summary: Datos del negocio y reglas para cualquier sesión
+      responses:
+        '200':
+          description: Negocio, reglas del POS, IVA y factura
+          content: { application/json: { schema: { $ref: '#/components/schemas/StoreSettings' } } }
+        default: { $ref: '#/components/responses/Error' }
+  /settings/logo:
+    post:
+      tags: [Configuración]
+      summary: Subir el logo del negocio
+      description: 'Permiso: `settings:update`. PNG o JPG de hasta 2 MB, guardado en Supabase Storage.'
+      requestBody:
+        required: true
+        content: { multipart/form-data: { schema: { type: object, required: [logo], properties: { logo: { type: string, format: binary } } } } }
+      responses:
+        '200': { $ref: '#/components/responses/Settings' }
+        default: { $ref: '#/components/responses/Error' }
+    delete:
+      tags: [Configuración]
+      summary: Quitar el logo
+      description: 'Permiso: `settings:update`.'
+      responses:
+        '200': { $ref: '#/components/responses/Settings' }
+        default: { $ref: '#/components/responses/Error' }
+  /backups:
+    get:
+      tags: [Respaldos]
+      summary: Historial de respaldos
+      description: 'Permiso: `backups:view`.'
+      parameters:
+        - { $ref: '#/components/parameters/Page' }
+        - { $ref: '#/components/parameters/PageSize' }
+      responses:
+        '200':
+          description: Página de respaldos
+          content: { application/json: { schema: { $ref: '#/components/schemas/BackupPage' } } }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Respaldos]
+      summary: Crear un respaldo
+      description: 'Permiso: `backups:create`. Una sola operación a la vez; si no, responde `backup_busy`.'
+      responses:
+        '201': { $ref: '#/components/responses/Backup' }
+        default: { $ref: '#/components/responses/Error' }
+  /backups/status:
+    get:
+      tags: [Respaldos]
+      summary: Programación y retención
+      description: 'Permiso: `backups:view`.'
+      responses:
+        '200':
+          description: Estado
+          content: { application/json: { schema: { $ref: '#/components/schemas/BackupStatus' } } }
+        default: { $ref: '#/components/responses/Error' }
+  /backups/{id}/file:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Respaldos]
+      summary: Descargar un respaldo
+      description: 'Permiso: `backups:create`.'
+      responses:
+        '200':
+          description: Archivo
+          content: { application/octet-stream: { schema: { type: string, format: binary } } }
+        default: { $ref: '#/components/responses/Error' }
+  /backups/{id}/verify:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Respaldos]
+      summary: Simulacro de restauración
+      description: 'Permiso: `backups:create`. Carga el respaldo en una base temporal y cuenta las tablas clave.'
+      responses:
+        '200': { $ref: '#/components/responses/Backup' }
+        default: { $ref: '#/components/responses/Error' }
+  /backups/{id}/restore:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Respaldos]
+      summary: Restaurar un respaldo
+      description: 'Permiso: `backups:authorize`. Reemplaza toda la base de datos, previa copia de seguridad, y cierra todas las sesiones. Mientras dura, la API responde 503 `maintenance`.'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [currentPassword, confirmation], properties: { currentPassword: { type: string, format: password }, confirmation: { type: string, const: RESTAURAR } } } } }
+      responses:
+        '200':
+          description: Restaurado
+          content: { application/json: { schema: { type: object, properties: { restored: { $ref: '#/components/schemas/Backup' }, safetyCopy: { $ref: '#/components/schemas/Backup' } } } } }
+        default: { $ref: '#/components/responses/Error' }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+  parameters:
+    Id: { name: id, in: path, required: true, schema: { type: string, format: uuid } }
+    Page: { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+    PageSize: { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+    Search: { name: search, in: query, schema: { type: string } }
+    Active: { name: active, in: query, schema: { type: boolean } }
+    From: { name: from, in: query, description: Primer día, inclusive, schema: { type: string, format: date } }
+    To: { name: to, in: query, description: Último día, inclusive, schema: { type: string, format: date } }
+  requestBodies:
+    Status:
+      required: true
+      content: { application/json: { schema: { type: object, required: [active], properties: { active: { type: boolean } } } } }
+    Reason:
+      required: true
+      content: { application/json: { schema: { type: object, required: [reason], properties: { reason: { type: string, minLength: 3, maxLength: 300 } } } } }
+    Master:
+      required: true
+      content: { application/json: { schema: { $ref: '#/components/schemas/MasterInput' } } }
+    Product:
+      required: true
+      content: { application/json: { schema: { $ref: '#/components/schemas/ProductInput' } } }
+    Customer:
+      required: true
+      content: { application/json: { schema: { $ref: '#/components/schemas/CustomerInput' } } }
+    Supplier:
+      required: true
+      content: { application/json: { schema: { $ref: '#/components/schemas/SupplierInput' } } }
+    Purchase:
+      required: true
+      content: { application/json: { schema: { $ref: '#/components/schemas/PurchaseInput' } } }
+    Register:
+      required: true
+      content: { application/json: { schema: { $ref: '#/components/schemas/RegisterInput' } } }
+  responses:
+    Error:
+      description: Error con el sobre común
+      content: { application/json: { schema: { $ref: '#/components/schemas/ErrorEnvelope' } } }
+    Session:
+      description: Sesión iniciada
+      content: { application/json: { schema: { $ref: '#/components/schemas/Session' } } }
+    User:
+      description: Usuario
+      content: { application/json: { schema: { $ref: '#/components/schemas/User' } } }
+    Role:
+      description: Rol
+      content: { application/json: { schema: { $ref: '#/components/schemas/Role' } } }
+    Master:
+      description: Registro
+      content: { application/json: { schema: { $ref: '#/components/schemas/Master' } } }
+    MasterList:
+      description: Registros
+      content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/Master' } } } } } }
+    Product:
+      description: Producto
+      content: { application/json: { schema: { $ref: '#/components/schemas/Product' } } }
+    Customer:
+      description: Cliente
+      content: { application/json: { schema: { $ref: '#/components/schemas/Customer' } } }
+    Supplier:
+      description: Proveedor
+      content: { application/json: { schema: { $ref: '#/components/schemas/Supplier' } } }
+    Purchase:
+      description: Compra
+      content: { application/json: { schema: { $ref: '#/components/schemas/Purchase' } } }
+    Rate:
+      description: Tasa
+      content: { application/json: { schema: { $ref: '#/components/schemas/Rate' } } }
+    RegisterList:
+      description: Cajas
+      content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/Register' } } } } } }
+    Shift:
+      description: Turno
+      content: { application/json: { schema: { $ref: '#/components/schemas/Shift' } } }
+    Sale:
+      description: Venta. 201 si se creó, 200 si la clave ya existía.
+      content: { application/json: { schema: { $ref: '#/components/schemas/Sale' } } }
+    Settings:
+      description: Configuración
+      content: { application/json: { schema: { $ref: '#/components/schemas/Settings' } } }
+    Backup:
+      description: Respaldo
+      content: { application/json: { schema: { $ref: '#/components/schemas/Backup' } } }
+  schemas:
+    Money: { type: string, pattern: '^\d+(\.\d{1,2})?$', examples: ['1250.50'] }
+    Ref:
+      type: object
+      properties: { id: { type: string, format: uuid }, name: { type: string } }
+    PageMeta:
+      type: object
+      properties: { page: { type: integer }, pageSize: { type: integer }, total: { type: integer } }
+    ErrorEnvelope:
+      type: object
+      properties:
+        error:
+          type: object
+          required: [code, message, requestId]
+          properties:
+            code: { type: string, examples: [insufficient_stock] }
+            message: { type: string, examples: ['No hay stock suficiente.'] }
+            requestId: { type: string }
+            details:
+              type: object
+              properties:
+                fields:
+                  type: array
+                  items:
+                    type: object
+                    properties: { field: { type: string }, code: { type: string }, message: { type: string } }
+    Health:
+      type: object
+      properties: { status: { type: string, enum: [ok, degraded] }, database: { type: string, enum: [ok, unreachable] } }
+    LoginRequest:
+      type: object
+      required: [identifier, password]
+      properties:
+        identifier: { type: string, maxLength: 254, description: Usuario o correo }
+        password: { type: string, format: password, maxLength: 128 }
+    ChangePasswordRequest:
+      type: object
+      required: [currentPassword, newPassword]
+      properties: { currentPassword: { type: string, format: password }, newPassword: { type: string, format: password } }
+    SetPinRequest:
+      type: object
+      required: [currentPassword, pin]
+      properties: { currentPassword: { type: string, format: password }, pin: { type: string, format: password } }
+    ResetPasswordRequest:
+      type: object
+      required: [token, newPassword]
+      properties: { token: { type: string }, newPassword: { type: string, format: password } }
+    Principal:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        fullName: { type: string }
+        email: { type: string, format: email }
+        username: { type: string }
+        role: { type: object, properties: { id: { type: string, format: uuid }, code: { type: [string, 'null'] }, name: { type: string } } }
+        permissions: { type: array, items: { type: string } }
+        mustChangePassword: { type: boolean }
+    Session:
+      type: object
+      properties:
+        accessToken: { type: string }
+        accessTokenExpiresAt: { type: string, format: date-time }
+        user: { $ref: '#/components/schemas/Principal' }
+    UserInput:
+      type: object
+      required: [fullName, email, username, roleId]
+      properties:
+        fullName: { type: string, minLength: 3, maxLength: 120 }
+        email: { type: string, format: email, maxLength: 254 }
+        username: { type: string }
+        roleId: { type: string, format: uuid }
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        fullName: { type: string }
+        email: { type: string, format: email }
+        username: { type: string }
+        role: { type: object, properties: { id: { type: string, format: uuid }, code: { type: [string, 'null'] }, name: { type: string } } }
+        active: { type: boolean }
+        mustChangePassword: { type: boolean }
+        lastLoginAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+    UserPage:
+      type: object
+      properties: { data: { type: array, items: { $ref: '#/components/schemas/User' } }, meta: { $ref: '#/components/schemas/PageMeta' } }
+    Role:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: [string, 'null'] }
+        name: { type: string }
+        description: { type: string }
+        isSystem: { type: boolean }
+        userCount: { type: integer }
+        permissions: { type: array, items: { type: string } }
+    Permission:
+      type: object
+      properties: { key: { type: string }, module: { type: string }, action: { type: string }, description: { type: string } }
+    MasterInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 80 }
+        abbreviation: { type: string, maxLength: 12, description: Solo unidades de medida }
+        parentId: { type: [string, 'null'], format: uuid, description: Solo categorías }
+    Master:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        abbreviation: { type: string }
+        parentId: { type: [string, 'null'], format: uuid }
+        active: { type: boolean }
+        productCount: { type: integer }
+    PresentationInput:
+      type: object
+      required: [name, factor, price]
+      properties:
+        id: { type: [string, 'null'], format: uuid }
+        name: { type: string, minLength: 2, maxLength: 60 }
+        factor: { type: integer, minimum: 2, maximum: 1000, description: Unidades base por presentación }
+        barcode: { type: [string, 'null'], maxLength: 32 }
+        price: { $ref: '#/components/schemas/Money' }
+    ProductInput:
+      type: object
+      required: [sku, name, categoryId, unitId, price]
+      properties:
+        sku: { type: string, minLength: 2, maxLength: 40 }
+        barcode: { type: [string, 'null'], maxLength: 32 }
+        name: { type: string, minLength: 2, maxLength: 160 }
+        description: { type: string, maxLength: 1000 }
+        categoryId: { type: string, format: uuid }
+        brandId: { type: [string, 'null'], format: uuid }
+        unitId: { type: string, format: uuid }
+        alcoholPercent: { type: [string, 'null'] }
+        volumeMl: { type: [integer, 'null'], minimum: 1, maximum: 100000 }
+        price: { $ref: '#/components/schemas/Money' }
+        averageCost: { $ref: '#/components/schemas/Money' }
+        taxPercent: { type: string, examples: ['15'] }
+        minStock: { type: integer, minimum: 0 }
+        reorderPoint: { type: integer, minimum: 0 }
+        allowNegativeStock: { type: boolean }
+        presentations: { type: array, maxItems: 10, items: { $ref: '#/components/schemas/PresentationInput' } }
+    Product:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        sku: { type: string }
+        barcode: { type: [string, 'null'] }
+        name: { type: string }
+        description: { type: string }
+        category: { $ref: '#/components/schemas/Ref' }
+        brand: { oneOf: [{ $ref: '#/components/schemas/Ref' }, { type: 'null' }] }
+        unit: { type: object, properties: { id: { type: string, format: uuid }, name: { type: string }, abbreviation: { type: string } } }
+        alcoholPercent: { type: [string, 'null'] }
+        volumeMl: { type: [integer, 'null'] }
+        imageUrl: { type: [string, 'null'], format: uri }
+        price: { $ref: '#/components/schemas/Money' }
+        averageCost: { type: string, description: Solo con `products:authorize` }
+        taxPercent: { type: string }
+        stock: { type: integer }
+        minStock: { type: integer }
+        reorderPoint: { type: integer }
+        allowNegativeStock: { type: boolean }
+        active: { type: boolean }
+        presentations: { type: array, items: { type: object } }
+        updatedAt: { type: string, format: date-time }
+    ProductPage:
+      type: object
+      properties: { data: { type: array, items: { $ref: '#/components/schemas/Product' } }, meta: { $ref: '#/components/schemas/PageMeta' } }
+    ImportReport:
+      type: object
+      properties:
+        total: { type: integer }
+        valid: { type: integer }
+        invalid: { type: integer }
+        created: { type: integer }
+        newBrands: { type: array, items: { type: string } }
+        rows: { type: array, items: { type: object } }
+    CustomerInput:
+      type: object
+      required: [fullName]
+      properties:
+        fullName: { type: string, minLength: 3, maxLength: 120 }
+        taxId: { type: [string, 'null'], maxLength: 20 }
+        phone: { type: [string, 'null'], maxLength: 20 }
+        email: { type: [string, 'null'], format: email, maxLength: 254 }
+        birthDate: { type: [string, 'null'], format: date }
+        address: { type: string, maxLength: 300 }
+    Customer:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        fullName: { type: string }
+        taxId: { type: [string, 'null'] }
+        phone: { type: [string, 'null'] }
+        email: { type: [string, 'null'] }
+        birthDate: { type: [string, 'null'], format: date }
+        address: { type: string }
+        isWalkIn: { type: boolean }
+        active: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    CustomerPage:
+      type: object
+      properties: { data: { type: array, items: { $ref: '#/components/schemas/Customer' } }, meta: { $ref: '#/components/schemas/PageMeta' } }
+    SupplierInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 120 }
+        taxId: { type: [string, 'null'], maxLength: 20 }
+        contactName: { type: string, maxLength: 120 }
+        phone: { type: [string, 'null'], maxLength: 20 }
+        email: { type: [string, 'null'], format: email, maxLength: 254 }
+        address: { type: string, maxLength: 300 }
+        creditDays: { type: integer, minimum: 0, maximum: 365 }
+    Supplier:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        taxId: { type: [string, 'null'] }
+        contactName: { type: string }
+        phone: { type: [string, 'null'] }
+        email: { type: [string, 'null'] }
+        address: { type: string }
+        creditDays: { type: integer }
+        active: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    SupplierPage:
+      type: object
+      properties: { data: { type: array, items: { $ref: '#/components/schemas/Supplier' } }, meta: { $ref: '#/components/schemas/PageMeta' } }
+    ProductRef:
+      type: object
+      properties: { id: { type: string, format: uuid }, sku: { type: string }, name: { type: string } }
+    AdjustmentInput:
+      type: object
+      required: [productId, kind, quantity, reason]
+      properties:
+        productId: { type: string, format: uuid }
+        kind: { type: string, enum: [count, shrinkage] }
+        quantity: { type: integer, minimum: 0, maximum: 100000 }
+        reason: { type: string, minLength: 3, maxLength: 300 }
+    InventoryMovement:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        product: { $ref: '#/components/schemas/ProductRef' }
+        type: { type: string }
+        quantity: { type: integer }
+        stockAfter: { type: integer }
+        unitCost: { type: string }
+        reason: { type: string }
+        sourceType: { type: [string, 'null'] }
+        sourceId: { type: [string, 'null'], format: uuid }
+        user: { $ref: '#/components/schemas/Ref' }
+        createdAt: { type: string, format: date-time }
+    InventoryMovementPage:
+      type: object
+      properties: { data: { type: array, items: { $ref: '#/components/schemas/InventoryMovement' } }, meta: { $ref: '#/components/schemas/PageMeta' } }
+    StockAlert:
+      type: object
+      properties:
+        product: { $ref: '#/components/schemas/ProductRef' }
+        category: { type: string }
+        stock: { type: integer }
+        minStock: { type: integer }
+        reorderPoint: { type: integer }
+        level: { type: string }
+        supplier: { oneOf: [{ $ref: '#/components/schemas/Ref' }, { type: 'null' }] }
+        lastCost: { type: string }
+    PurchaseInput:
+      type: object
+      required: [supplierId, purchaseDate, items]
+      properties:
+        supplierId: { type: string, format: uuid }
+        supplierInvoiceNumber: { type: string, maxLength: 40 }
+        purchaseDate: { type: string, format: date }
+        notes: { type: string, maxLength: 500 }
+        items:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            type: object
+            required: [productId, quantity, unitCost]
+            properties:
+              productId: { type: string, format: uuid }
+              quantity: { type: integer, minimum: 1, maximum: 100000 }
+              unitCost: { $ref: '#/components/schemas/Money' }
+    Purchase:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        supplier: { $ref: '#/components/schemas/Ref' }
+        supplierInvoiceNumber: { type: string }
+        status: { type: string, enum: [draft, received, voided] }
+        purchaseDate: { type: string, format: date }
+        subtotal: { $ref: '#/components/schemas/Money' }
+        tax: { $ref: '#/components/schemas/Money' }
+        total: { $ref: '#/components/schemas/Money' }
+        notes: { type: string }
+        itemCount: { type: integer }
+        createdBy: { $ref: '#/components/schemas/Ref' }
+        receivedBy: { oneOf: [{ $ref: '#/components/schemas/Ref' }, { type: 'null' }] }
+        receivedAt: { type: [string, 'null'], format: date-time }
+        voidReason: { type: string }
+        voidedAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              product: { $ref: '#/components/schemas/ProductRef' }
+              quantity: { type: integer }
+              unitCost: { type: string }
+              subtotal: { $ref: '#/components/schemas/Money' }
+              taxPercent: { type: string }
+              previousCost: { type: [string, 'null'] }
+    PurchasePage:
+      type: object
+      properties: { data: { type: array, items: { $ref: '#/components/schemas/Purchase' } }, meta: { $ref: '#/components/schemas/PageMeta' } }
+    Rate:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        rate: { type: string }
+        createdBy: { $ref: '#/components/schemas/Ref' }
+        createdAt: { type: string, format: date-time }
+    RatePage:
+      type: object
+      properties: { data: { type: array, items: { $ref: '#/components/schemas/Rate' } }, meta: { $ref: '#/components/schemas/PageMeta' } }
+    RegisterInput:
+      type: object
+      required: [name, invoiceSeries, active]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 60 }
+        invoiceSeries: { type: string, minLength: 2, maxLength: 8, pattern: '^[A-Za-z0-9]+$' }
+        active: { type: boolean }
+    Register:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        invoiceSeries: { type: string }
+        nextInvoiceNumber: { type: integer }
+        active: { type: boolean }
+        openShift:
+          oneOf:
+            - { type: 'null' }
+            - { type: object, properties: { id: { type: string, format: uuid }, user: { $ref: '#/components/schemas/Ref' }, openedAt: { type: string, format: date-time } } }
+    OpenShiftInput:
+      type: object
+      required: [registerId, openingNio, openingUsd]
+      properties:
+        registerId: { type: string, format: uuid }
+        openingNio: { $ref: '#/components/schemas/Money' }
+        openingUsd: { $ref: '#/components/schemas/Money' }
+    CashMovementInput:
+      type: object
+      required: [type, currency, amount, reason]
+      properties:
+        type: { type: string, enum: [income, expense] }
+        currency: { type: string, enum: [NIO, USD] }
+        amount: { $ref: '#/components/schemas/Money' }
+        reason: { type: string, minLength: 3, maxLength: 300 }
+    CloseShiftInput:
+      type: object
+      required: [countedNio, countedUsd]
+      properties:
+        countedNio: { $ref: '#/components/schemas/Money' }
+        countedUsd: { $ref: '#/components/schemas/Money' }
+        notes: { type: string, maxLength: 500 }
+    Shift:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        register: { $ref: '#/components/schemas/Ref' }
+        user: { $ref: '#/components/schemas/Ref' }
+        status: { type: string, enum: [open, closed] }
+        openedAt: { type: string, format: date-time }
+        closedAt: { type: [string, 'null'], format: date-time }
+        openingNio: { type: string }
+        openingUsd: { type: string }
+        expectedNio: { type: [string, 'null'] }
+        expectedUsd: { type: [string, 'null'] }
+        countedNio: { type: [string, 'null'] }
+        countedUsd: { type: [string, 'null'] }
+        differenceNio: { type: [string, 'null'] }
+        differenceUsd: { type: [string, 'null'] }
+        notes: { type: string }
+        summary: { type: object, description: Arqueo por moneda y método, solo en el detalle }
+        movements: { type: array, items: { type: object } }
+    ShiftPage:
+      type: object
+      properties: { data: { type: array, items: { $ref: '#/components/schemas/Shift' } }, meta: { $ref: '#/components/schemas/PageMeta' } }
+    Authorization:
+      type: object
+      required: [username, pin]
+      properties: { username: { type: string, maxLength: 32 }, pin: { type: string, format: password, maxLength: 6 } }
+    SaleInput:
+      type: object
+      required: [ageVerified, lines, payments]
+      properties:
+        customerId: { type: [string, 'null'], format: uuid, description: Sin valor, Consumidor final }
+        ageVerified: { type: boolean, description: Debe ser true }
+        notes: { type: string, maxLength: 300 }
+        discount:
+          type: object
+          required: [kind, value]
+          properties: { kind: { type: string, enum: [percent, amount] }, value: { $ref: '#/components/schemas/Money' } }
+        authorization: { $ref: '#/components/schemas/Authorization' }
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            type: object
+            required: [productId, quantity]
+            properties:
+              productId: { type: string, format: uuid }
+              presentationId: { type: [string, 'null'], format: uuid }
+              quantity: { type: integer, minimum: 1, maximum: 10000 }
+        payments:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items:
+            type: object
+            required: [method, currency, amount]
+            properties:
+              method: { type: string, enum: [cash, card, transfer] }
+              currency: { type: string, enum: [NIO, USD] }
+              amount: { $ref: '#/components/schemas/Money' }
+              reference: { type: [string, 'null'], maxLength: 60 }
+    Sale:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        invoice: { type: string, examples: [F001-000482] }
+        series: { type: string }
+        number: { type: integer }
+        status: { type: string, enum: [completed, voided] }
+        register: { $ref: '#/components/schemas/Ref' }
+        cashier: { $ref: '#/components/schemas/Ref' }
+        customer:
+          type: object
+          properties: { id: { type: string, format: uuid }, name: { type: string }, taxId: { type: [string, 'null'] }, email: { type: [string, 'null'] } }
+        shiftId: { type: string, format: uuid }
+        subtotal: { $ref: '#/components/schemas/Money' }
+        discount: { $ref: '#/components/schemas/Money' }
+        tax: { $ref: '#/components/schemas/Money' }
+        total: { $ref: '#/components/schemas/Money' }
+        exchangeRate: { type: string }
+        changeNio: { $ref: '#/components/schemas/Money' }
+        itemCount: { type: integer }
+        notes: { type: string }
+        voidReason: { type: [string, 'null'] }
+        voidedAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id: { type: string, format: uuid }
+              productId: { type: string, format: uuid }
+              presentationId: { type: [string, 'null'], format: uuid }
+              name: { type: string }
+              sku: { type: string }
+              quantity: { type: integer }
+              unitsPerItem: { type: integer }
+              unitPrice: { type: string }
+              discount: { type: string }
+              taxPercent: { type: string }
+              tax: { type: string }
+              subtotal: { type: string }
+              total: { type: string }
+        payments:
+          type: array
+          items:
+            type: object
+            properties:
+              method: { type: string, enum: [cash, card, transfer] }
+              currency: { type: string, enum: [NIO, USD] }
+              amount: { type: string }
+              exchangeRate: { type: string }
+              amountNio: { type: string }
+              reference: { type: [string, 'null'] }
+    SalePage:
+      type: object
+      properties: { data: { type: array, items: { $ref: '#/components/schemas/Sale' } }, meta: { $ref: '#/components/schemas/PageMeta' } }
+    Dashboard:
+      type: object
+      properties:
+        scope: { type: string, examples: [self] }
+        kpis:
+          type: object
+          properties:
+            salesToday: { type: string }
+            salesYesterday: { type: string }
+            salesCount: { type: integer }
+            averageTicket: { type: string }
+            profitToday: { type: string }
+            lowStock: { type: integer }
+        daily: { type: array, items: { type: object } }
+        top: { type: array, items: { type: object } }
+        categories: { type: array, items: { type: object } }
+        methods: { type: array, items: { type: object } }
+        heatmap: { type: array, items: { type: object } }
+    ReportResult:
+      type: object
+      properties:
+        key: { type: string }
+        title: { type: string }
+        columns: { type: array, items: { type: object } }
+        rows: { type: array, items: { type: object } }
+        totals: { type: object }
+        truncated: { type: boolean }
+        filters: { type: array, items: { type: string } }
+    AuditEntry:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        userName: { type: [string, 'null'] }
+        action: { type: string, examples: [sales.voided] }
+        entity: { type: string }
+        entityId: { type: [string, 'null'], format: uuid }
+        before: {}
+        after: {}
+        ip: { type: [string, 'null'] }
+        userAgent: { type: [string, 'null'] }
+        createdAt: { type: string, format: date-time }
+    AuditPage:
+      type: object
+      properties: { data: { type: array, items: { $ref: '#/components/schemas/AuditEntry' } }, meta: { $ref: '#/components/schemas/PageMeta' } }
+    Business:
+      type: object
+      properties:
+        name: { type: string }
+        taxId: { type: string }
+        address: { type: string }
+        phone: { type: string }
+        email: { type: string }
+        logoUrl: { type: [string, 'null'], format: uri }
+    Settings:
+      type: object
+      properties:
+        business: { $ref: '#/components/schemas/Business' }
+        tax: { type: object, properties: { defaultPercent: { type: number } } }
+        pos:
+          type: object
+          properties:
+            discountLimitPercent: { type: number }
+            allowNegativeStock: { type: boolean }
+            defaultPrintFormat: { type: string, enum: [ticket, invoice] }
+        invoice: { type: object, properties: { footerNote: { type: string } } }
+    StoreSettings: { $ref: '#/components/schemas/Settings' }
+    SettingsInput:
+      type: object
+      required: [business, tax, pos, invoice]
+      properties:
+        business:
+          type: object
+          required: [name]
+          properties:
+            name: { type: string, maxLength: 120 }
+            taxId: { type: string, maxLength: 30 }
+            address: { type: string, maxLength: 200 }
+            phone: { type: string, maxLength: 40 }
+            email: { type: string, maxLength: 120 }
+        tax: { type: object, properties: { defaultPercent: { type: number, minimum: 0, maximum: 100 } } }
+        pos:
+          type: object
+          required: [defaultPrintFormat]
+          properties:
+            discountLimitPercent: { type: number, minimum: 0, maximum: 100 }
+            defaultPrintFormat: { type: string, enum: [ticket, invoice] }
+        invoice: { type: object, properties: { footerNote: { type: string, maxLength: 160 } } }
+    Backup:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        fileName: { type: string }
+        sizeBytes: { type: [integer, 'null'] }
+        checksum: { type: [string, 'null'] }
+        kind: { type: string, enum: [manual, scheduled, pre_restore] }
+        status: { type: string, enum: [running, completed, failed] }
+        createdBy: { oneOf: [{ $ref: '#/components/schemas/Ref' }, { type: 'null' }] }
+        createdAt: { type: string, format: date-time }
+        completedAt: { type: [string, 'null'], format: date-time }
+        offsite: { type: boolean }
+        available: { type: boolean }
+        verifiedAt: { type: [string, 'null'], format: date-time }
+        verification: { type: [object, 'null'] }
+    BackupPage:
+      type: object
+      properties: { data: { type: array, items: { $ref: '#/components/schemas/Backup' } }, meta: { $ref: '#/components/schemas/PageMeta' } }
+    BackupStatus:
+      type: object
+      properties:
+        offsite: { type: boolean }
+        scheduleHour: { type: integer }
+        dailyRetention: { type: integer }
+        weeklyRetention: { type: integer }

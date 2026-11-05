@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"licoreria/api/internal/apidocs"
 	"licoreria/api/internal/auditlog"
 	"licoreria/api/internal/auth"
 	"licoreria/api/internal/backups"
@@ -77,6 +78,7 @@ func NewRouter(deps Deps) http.Handler {
 
 	r.Route("/api/v1", func(api chi.Router) {
 		health.NewHandler(deps.DB).Routes(api)
+		apidocs.Routes(api)
 
 		api.Group(func(gated chi.Router) {
 			gated.Use(deps.Backups.Gate().Middleware)
