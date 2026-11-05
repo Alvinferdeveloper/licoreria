@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"regexp"
 	"strings"
 
 	"github.com/go-playground/validator/v10"
@@ -24,8 +25,13 @@ func newValidator() *validator.Validate {
 		}
 		return name
 	})
+	_ = v.RegisterValidation("username", func(fl validator.FieldLevel) bool {
+		return usernamePattern.MatchString(fl.Field().String())
+	})
 	return v
 }
+
+var usernamePattern = regexp.MustCompile(`^[a-zA-Z0-9._-]{3,32}$`)
 
 // Bind decodes a strict JSON body into dst and validates its `validate` tags.
 func Bind(w http.ResponseWriter, r *http.Request, dst any) error {
@@ -99,6 +105,8 @@ func messageFor(fe validator.FieldError) string {
 		return "Debe ser un número."
 	case "datetime":
 		return "La fecha no tiene un formato válido."
+	case "username":
+		return "Usa de 3 a 32 letras, números, punto, guion o guion bajo, sin espacios."
 	default:
 		return "El valor no es válido."
 	}

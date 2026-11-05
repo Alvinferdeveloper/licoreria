@@ -21,6 +21,7 @@ const (
 	KindTooLarge
 	KindUnsupportedMedia
 	KindUnavailable
+	KindTooManyRequests
 )
 
 // Error carries a stable English code and a Spanish message safe to show to users.
@@ -110,4 +111,5 @@ var (
 	ErrUnsupportedMedia = New(KindUnsupportedMedia, "unsupported_media_type", "Envía los datos en formato JSON.")
 	ErrInternal         = New(KindInternal, "internal_error", "Ocurrió un error inesperado. Intenta de nuevo.")
 	ErrUnavailable      = New(KindUnavailable, "service_unavailable", "El servicio no está disponible en este momento.")
+	ErrTooManyRequests  = New(KindTooManyRequests, "too_many_requests", "Demasiados intentos. Espera un momento e intenta de nuevo.")
 )

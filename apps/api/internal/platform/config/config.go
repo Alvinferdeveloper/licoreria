@@ -1,9 +1,10 @@
-// Package config loads runtime settings from environment variables.
+// Package config loads runtime settings from environment variables and validates them at startup.
 package config
 
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -18,39 +19,87 @@ type Config struct {
 	ShutdownTimeout time.Duration
 	LogLevel        string
 	LogFormat       string
+
+	// AppBaseURL is the public web URL used in email links.
+	AppBaseURL string
+
+	Auth AuthConfig
+	Mail MailConfig
+}
+
+type AuthConfig struct {
+	JWTSecret       []byte
+	AccessTokenTTL  time.Duration
+	RefreshTokenTTL time.Duration
+	ResetTokenTTL   time.Duration
+	CookieSecure    bool
+}
+
+type MailConfig struct {
+	SMTPHost     string
+	SMTPPort     int
+	SMTPUsername string
+	SMTPPassword string
+	From         string
 }
 
 func (c Config) IsProduction() bool { return c.Env == "production" }
 
+const minJWTSecretBytes = 32
+
 func Load() (Config, error) {
+	var errs []error
+	env := getEnv("APP_ENV", "development")
+	production := env == "production"
+	defaultLogFormat := "text"
+	if production {
+		defaultLogFormat = "json"
+	}
+
 	cfg := Config{
-		Env:             getEnv("APP_ENV", "development"),
-		HTTPAddr:        getEnv("HTTP_ADDR", ":8080"),
-		DatabaseURL:     os.Getenv("DATABASE_URL"),
-		AllowedOrigins:  splitList(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000")),
-		LogLevel:        getEnv("LOG_LEVEL", "info"),
-		ShutdownTimeout: 10 * time.Second,
+		Env:            env,
+		HTTPAddr:       getEnv("HTTP_ADDR", ":8080"),
+		DatabaseURL:    os.Getenv("DATABASE_URL"),
+		AllowedOrigins: splitList(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000")),
+		LogLevel:       getEnv("LOG_LEVEL", "info"),
+		LogFormat:      getEnv("LOG_FORMAT", defaultLogFormat),
+		AppBaseURL:     strings.TrimRight(getEnv("APP_BASE_URL", "http://localhost:3000"), "/"),
+		Auth: AuthConfig{
+			JWTSecret: []byte(os.Getenv("JWT_SECRET")),
+		},
+		Mail: MailConfig{
+			SMTPHost:     getEnv("SMTP_HOST", "localhost"),
+			SMTPUsername: os.Getenv("SMTP_USERNAME"),
+			SMTPPassword: os.Getenv("SMTP_PASSWORD"),
+			From:         getEnv("MAIL_FROM", "Añejo <no-reply@anejo.local>"),
+		},
 	}
 
-	if raw := os.Getenv("SHUTDOWN_TIMEOUT_SECONDS"); raw != "" {
-		seconds, err := strconv.Atoi(raw)
-		if err != nil || seconds <= 0 {
-			return Config{}, fmt.Errorf("SHUTDOWN_TIMEOUT_SECONDS must be a positive integer")
-		}
-		cfg.ShutdownTimeout = time.Duration(seconds) * time.Second
-	}
-
-	defaultFormat := "text"
-	if cfg.IsProduction() {
-		defaultFormat = "json"
-	}
-	cfg.LogFormat = getEnv("LOG_FORMAT", defaultFormat)
-	if cfg.LogFormat != "text" && cfg.LogFormat != "json" {
-		return Config{}, errors.New("LOG_FORMAT must be text or json")
-	}
+	cfg.ShutdownTimeout = durationEnv("SHUTDOWN_TIMEOUT", 10*time.Second, &errs)
+	cfg.Auth.AccessTokenTTL = durationEnv("ACCESS_TOKEN_TTL", 15*time.Minute, &errs)
+	cfg.Auth.RefreshTokenTTL = durationEnv("REFRESH_TOKEN_TTL", 7*24*time.Hour, &errs)
+	cfg.Auth.ResetTokenTTL = durationEnv("RESET_TOKEN_TTL", 30*time.Minute, &errs)
+	cfg.Auth.CookieSecure = boolEnv("COOKIE_SECURE", production, &errs)
+	cfg.Mail.SMTPPort = intEnv("SMTP_PORT", 1025, &errs)
 
 	if cfg.DatabaseURL == "" {
-		return Config{}, errors.New("DATABASE_URL is required")
+		errs = append(errs, errors.New("DATABASE_URL is required"))
+	}
+	if len(cfg.Auth.JWTSecret) < minJWTSecretBytes {
+		errs = append(errs, fmt.Errorf("JWT_SECRET must be at least %d bytes", minJWTSecretBytes))
+	}
+	if cfg.LogFormat != "text" && cfg.LogFormat != "json" {
+		errs = append(errs, errors.New("LOG_FORMAT must be text or json"))
+	}
+	if u, err := url.Parse(cfg.AppBaseURL); err != nil || u.Scheme == "" || u.Host == "" {
+		errs = append(errs, errors.New("APP_BASE_URL must be an absolute URL"))
+	}
+	if production && !cfg.Auth.CookieSecure {
+		errs = append(errs, errors.New("COOKIE_SECURE cannot be false in production"))
+	}
+
+	if len(errs) > 0 {
+		return Config{}, errors.Join(errs...)
 	}
 	return cfg, nil
 }
@@ -60,6 +109,45 @@ func getEnv(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func durationEnv(key string, fallback time.Duration, errs *[]error) time.Duration {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return fallback
+	}
+	d, err := time.ParseDuration(raw)
+	if err != nil || d <= 0 {
+		*errs = append(*errs, fmt.Errorf("%s must be a positive duration like 15m or 168h", key))
+		return fallback
+	}
+	return d
+}
+
+func intEnv(key string, fallback int, errs *[]error) int {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n <= 0 {
+		*errs = append(*errs, fmt.Errorf("%s must be a positive integer", key))
+		return fallback
+	}
+	return n
+}
+
+func boolEnv(key string, fallback bool, errs *[]error) bool {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return fallback
+	}
+	b, err := strconv.ParseBool(raw)
+	if err != nil {
+		*errs = append(*errs, fmt.Errorf("%s must be true or false", key))
+		return fallback
+	}
+	return b
 }
 
 func splitList(raw string) []string {

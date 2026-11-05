@@ -21,7 +21,7 @@ const RequestIDHeader = "X-Request-Id"
 var validRequestID = regexp.MustCompile(`^[A-Za-z0-9._-]{8,64}$`)
 
 // RequestID reuses a safe incoming X-Request-Id or generates a UUID, echoes it in the
-// response and stores a logger tagged with it in the context.
+// response and stores the client info and a logger tagged with the id in the context.
 func RequestID(base *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -31,7 +31,7 @@ func RequestID(base *slog.Logger) func(http.Handler) http.Handler {
 			}
 			w.Header().Set(RequestIDHeader, requestID)
 
-			ctx := context.WithValue(r.Context(), middleware.RequestIDKey, requestID)
+			ctx := context.WithValue(withClientInfo(r), middleware.RequestIDKey, requestID)
 			ctx = logx.WithLogger(ctx, base.With("request_id", requestID))
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

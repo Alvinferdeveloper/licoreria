@@ -27,6 +27,7 @@ var statusByKind = map[apperr.Kind]int{
 	apperr.KindTooLarge:         http.StatusRequestEntityTooLarge,
 	apperr.KindUnsupportedMedia: http.StatusUnsupportedMediaType,
 	apperr.KindUnavailable:      http.StatusServiceUnavailable,
+	apperr.KindTooManyRequests:  http.StatusTooManyRequests,
 }
 
 // toBody resolves the status and public body for any error; unknown errors become internal_error.

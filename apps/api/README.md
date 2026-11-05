@@ -32,6 +32,36 @@ go run ./cmd/api migrate version
 go test ./...
 ```
 
+## Primer administrador
+
+```bash
+go run ./cmd/api create-admin -name "Lucía Barberena" -email lucia@example.com -username lucia
+# en contenedor: podman compose exec api api create-admin ...  (o docker compose exec ...)
+```
+
+Imprime una contraseña temporal una sola vez; el sistema obliga a cambiarla en el primer inicio de sesión.
+
+## Endpoints
+
+| Método y ruta | Permiso | Descripción |
+| --- | --- | --- |
+| `POST /auth/login` | público | Usuario o correo y contraseña. Devuelve el token de acceso y fija la cookie de refresco |
+| `POST /auth/refresh` | cookie | Rota la cookie de refresco y emite un token nuevo |
+| `POST /auth/logout` | cookie | Cierra la sesión |
+| `POST /auth/forgot-password` | público | Envía un enlace de un solo uso (30 min) |
+| `POST /auth/reset-password` | público | Define la contraseña nueva con el enlace |
+| `GET /auth/me` | sesión | Usuario actual, rol y permisos |
+| `POST /auth/change-password` | sesión | Cambio de contraseña (obligatorio con contraseña temporal) |
+| `GET/POST /users`, `GET/PUT /users/{id}` | `users:*` | Usuarios; al crear se envía la contraseña temporal por correo |
+| `PATCH /users/{id}/status` | `users:delete` | Activar o desactivar; desactivar cierra sus sesiones |
+| `POST /users/{id}/resend-access` | `users:update` | Nueva contraseña temporal |
+| `GET /roles`, `GET /roles/{id}`, `GET /permissions` | `roles:view` | Roles y catálogo de permisos |
+| `PUT /roles/{id}/permissions` | `roles:update` | Reemplaza los permisos de un rol (el de Administrador no se edita) |
+
+Seguridad: contraseñas con Argon2id; token de acceso JWT de 15 min y cookie de refresco `HttpOnly` rotativa, cuya reutilización cierra todas las sesiones del usuario; bloqueo tras 5 intentos fallidos y límite de intentos por IP; los permisos se verifican en cada request contra la base de datos.
+
+En desarrollo los correos llegan a Mailpit: http://localhost:8025.
+
 ## Variables de entorno
 
 | Variable | Por defecto | Descripción |
@@ -42,7 +72,14 @@ go test ./...
 | `LOG_LEVEL` | `info` | `debug`, `info`, `warn`, `error` |
 | `LOG_FORMAT` | `text` en desarrollo, `json` en producción | Formato de los logs |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:3000` | Orígenes permitidos, separados por coma |
-| `SHUTDOWN_TIMEOUT_SECONDS` | `10` | Tiempo para terminar requests al apagar |
+| `SHUTDOWN_TIMEOUT` | `10s` | Tiempo para terminar requests al apagar |
+| `JWT_SECRET` | (obligatoria, 32+ bytes) | Firma de los tokens de acceso |
+| `ACCESS_TOKEN_TTL` / `REFRESH_TOKEN_TTL` / `RESET_TOKEN_TTL` | `15m` / `168h` / `30m` | Vigencias |
+| `COOKIE_SECURE` | `true` en producción | Cookie de refresco solo por HTTPS |
+| `APP_BASE_URL` | `http://localhost:3000` | URL de la web para los enlaces de los correos |
+| `SMTP_HOST` / `SMTP_PORT` | `localhost` / `1025` | Servidor de correo (Mailpit en desarrollo) |
+| `SMTP_USERNAME` / `SMTP_PASSWORD` / `MAIL_FROM` | | Credenciales y remitente |
+| `TEST_DATABASE_URL` | | Base separada para las pruebas de integración |
 
 ## Convenciones
 

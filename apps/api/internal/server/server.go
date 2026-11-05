@@ -13,9 +13,12 @@ import (
 	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"licoreria/api/internal/auth"
 	"licoreria/api/internal/health"
 	"licoreria/api/internal/httpx"
 	"licoreria/api/internal/platform/config"
+	"licoreria/api/internal/roles"
+	"licoreria/api/internal/users"
 )
 
 type Deps struct {
@@ -44,8 +47,18 @@ func NewRouter(deps Deps) http.Handler {
 	r.NotFound(httpx.NotFound)
 	r.MethodNotAllowed(httpx.MethodNotAllowed)
 
+	authSvc := auth.NewService(deps.DB, deps.Config.Auth, deps.Config.AppBaseURL, time.Now)
+	usersSvc := users.NewService(deps.DB, deps.Config.AppBaseURL, time.Now)
+
 	r.Route("/api/v1", func(api chi.Router) {
 		health.NewHandler(deps.DB).Routes(api)
+		auth.NewHandler(authSvc, deps.Config.Auth.CookieSecure).Routes(api)
+
+		api.Group(func(protected chi.Router) {
+			protected.Use(auth.Authenticate(authSvc), auth.RequirePasswordChanged)
+			users.NewHandler(usersSvc).Routes(protected)
+			roles.NewHandler(roles.NewService(deps.DB)).Routes(protected)
+		})
 	})
 	return r
 }
