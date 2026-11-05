@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/go-playground/validator/v10"
@@ -28,10 +29,23 @@ func newValidator() *validator.Validate {
 	_ = v.RegisterValidation("username", func(fl validator.FieldLevel) bool {
 		return usernamePattern.MatchString(fl.Field().String())
 	})
+	// Amounts travel as decimal strings ("421.75") so no precision is lost to floats.
+	_ = v.RegisterValidation("money", func(fl validator.FieldLevel) bool {
+		return moneyPattern.MatchString(fl.Field().String())
+	})
+	_ = v.RegisterValidation("percent", func(fl validator.FieldLevel) bool {
+		value := fl.Field().String()
+		n, err := strconv.ParseFloat(value, 64)
+		return percentPattern.MatchString(value) && err == nil && n <= 100
+	})
 	return v
 }
 
-var usernamePattern = regexp.MustCompile(`^[a-zA-Z0-9._-]{3,32}$`)
+var (
+	usernamePattern = regexp.MustCompile(`^[a-zA-Z0-9._-]{3,32}$`)
+	moneyPattern    = regexp.MustCompile(`^\d{1,11}(\.\d{1,2})?$`)
+	percentPattern  = regexp.MustCompile(`^\d{1,3}(\.\d{1,2})?$`)
+)
 
 // Bind decodes a strict JSON body into dst and validates its `validate` tags.
 func Bind(w http.ResponseWriter, r *http.Request, dst any) error {
@@ -105,6 +119,10 @@ func messageFor(fe validator.FieldError) string {
 		return "Debe ser un número."
 	case "datetime":
 		return "La fecha no tiene un formato válido."
+	case "money":
+		return "Escribe un monto válido, por ejemplo 421.75."
+	case "percent":
+		return "Escribe un porcentaje entre 0 y 100."
 	case "username":
 		return "Usa de 3 a 32 letras, números, punto, guion o guion bajo, sin espacios."
 	default:

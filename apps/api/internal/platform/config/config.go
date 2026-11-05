@@ -23,8 +23,16 @@ type Config struct {
 	// AppBaseURL is the public web URL used in email links.
 	AppBaseURL string
 
-	Auth AuthConfig
-	Mail MailConfig
+	Auth    AuthConfig
+	Mail    MailConfig
+	Storage StorageConfig
+}
+
+// StorageConfig points at Supabase Storage; when empty, image uploads are disabled.
+type StorageConfig struct {
+	SupabaseURL        string
+	SupabaseServiceKey string
+	Bucket             string
 }
 
 type AuthConfig struct {
@@ -73,6 +81,11 @@ func Load() (Config, error) {
 			SMTPPassword: os.Getenv("SMTP_PASSWORD"),
 			From:         getEnv("MAIL_FROM", "Añejo <no-reply@anejo.local>"),
 		},
+		Storage: StorageConfig{
+			SupabaseURL:        os.Getenv("SUPABASE_URL"),
+			SupabaseServiceKey: os.Getenv("SUPABASE_SERVICE_KEY"),
+			Bucket:             getEnv("SUPABASE_BUCKET", "productos"),
+		},
 	}
 
 	cfg.ShutdownTimeout = durationEnv("SHUTDOWN_TIMEOUT", 10*time.Second, &errs)
@@ -93,6 +106,11 @@ func Load() (Config, error) {
 	}
 	if u, err := url.Parse(cfg.AppBaseURL); err != nil || u.Scheme == "" || u.Host == "" {
 		errs = append(errs, errors.New("APP_BASE_URL must be an absolute URL"))
+	}
+	if cfg.Storage.SupabaseURL != "" {
+		if u, err := url.Parse(cfg.Storage.SupabaseURL); err != nil || u.Scheme != "https" {
+			errs = append(errs, errors.New("SUPABASE_URL must be an https URL like https://<project>.supabase.co"))
+		}
 	}
 	if production && !cfg.Auth.CookieSecure {
 		errs = append(errs, errors.New("COOKIE_SECURE cannot be false in production"))

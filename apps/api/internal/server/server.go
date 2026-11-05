@@ -14,9 +14,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"licoreria/api/internal/auth"
+	"licoreria/api/internal/catalog"
 	"licoreria/api/internal/health"
 	"licoreria/api/internal/httpx"
+	"licoreria/api/internal/parties"
 	"licoreria/api/internal/platform/config"
+	"licoreria/api/internal/platform/storage"
+	"licoreria/api/internal/products"
 	"licoreria/api/internal/roles"
 	"licoreria/api/internal/users"
 )
@@ -49,6 +53,14 @@ func NewRouter(deps Deps) http.Handler {
 
 	authSvc := auth.NewService(deps.DB, deps.Config.Auth, deps.Config.AppBaseURL, time.Now)
 	usersSvc := users.NewService(deps.DB, deps.Config.AppBaseURL, time.Now)
+	store := storage.NewSupabase(storage.Config{
+		URL:        deps.Config.Storage.SupabaseURL,
+		ServiceKey: deps.Config.Storage.SupabaseServiceKey,
+		Bucket:     deps.Config.Storage.Bucket,
+	})
+	if !store.Enabled() {
+		deps.Logger.Warn("supabase storage not configured, product image uploads are disabled")
+	}
 
 	r.Route("/api/v1", func(api chi.Router) {
 		health.NewHandler(deps.DB).Routes(api)
@@ -58,6 +70,10 @@ func NewRouter(deps Deps) http.Handler {
 			protected.Use(auth.Authenticate(authSvc), auth.RequirePasswordChanged)
 			users.NewHandler(usersSvc).Routes(protected)
 			roles.NewHandler(roles.NewService(deps.DB)).Routes(protected)
+			catalog.NewHandler(catalog.NewService(deps.DB)).Routes(protected)
+			products.NewHandler(products.NewService(deps.DB, store)).Routes(protected)
+			parties.NewCustomerHandler(parties.NewCustomerService(deps.DB)).Routes(protected)
+			parties.NewSupplierHandler(parties.NewSupplierService(deps.DB)).Routes(protected)
 		})
 	})
 	return r

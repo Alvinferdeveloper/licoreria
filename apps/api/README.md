@@ -80,6 +80,22 @@ En desarrollo los correos llegan a Mailpit: http://localhost:8025.
 | `SMTP_HOST` / `SMTP_PORT` | `localhost` / `1025` | Servidor de correo (Mailpit en desarrollo) |
 | `SMTP_USERNAME` / `SMTP_PASSWORD` / `MAIL_FROM` | | Credenciales y remitente |
 | `TEST_DATABASE_URL` | | Base separada para las pruebas de integración |
+| `SUPABASE_URL` / `SUPABASE_SERVICE_KEY` | | Supabase Storage para imágenes de productos; sin ellas la subida de imágenes responde `storage_not_configured` |
+| `SUPABASE_BUCKET` | `productos` | Bucket público donde se guardan las imágenes |
+
+## Datos de demostración
+
+```bash
+go run ./cmd/api seed-demo   # 200+ productos con stock inicial, clientes y proveedores (requiere un administrador)
+```
+
+## Imágenes de productos (Supabase)
+
+1. En Supabase, crea un bucket **público** llamado `productos` (Storage > New bucket > Public).
+2. En Project Settings > API copia la URL del proyecto y la clave `service_role`.
+3. Agrégalas a `.env` como `SUPABASE_URL` y `SUPABASE_SERVICE_KEY` y reinicia la API.
+
+La clave `service_role` solo vive en el servidor; el navegador sube la imagen a la API (`POST /products/{id}/image`, JPG/PNG/WebP hasta 5 MB) y la API la envía a Supabase.
 
 ## Convenciones
 

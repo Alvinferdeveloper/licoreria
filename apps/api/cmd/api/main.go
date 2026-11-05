@@ -17,6 +17,7 @@ import (
 	"licoreria/api/internal/platform/config"
 	"licoreria/api/internal/platform/database"
 	"licoreria/api/internal/platform/logx"
+	"licoreria/api/internal/seed"
 	"licoreria/api/internal/server"
 	"licoreria/api/internal/users"
 )
@@ -48,8 +49,10 @@ func run(args []string) error {
 		return migrate(cfg, logger, args[1:])
 	case "create-admin":
 		return createAdmin(cfg, args[1:])
+	case "seed-demo":
+		return seedDemo(cfg)
 	default:
-		return fmt.Errorf("unknown command %q (use serve, migrate or create-admin)", command)
+		return fmt.Errorf("unknown command %q (use serve, migrate, create-admin or seed-demo)", command)
 	}
 }
 
@@ -75,6 +78,30 @@ func serve(cfg config.Config, logger *slog.Logger) error {
 
 	router := server.NewRouter(server.Deps{Config: cfg, Logger: logger, DB: pool})
 	return server.Run(ctx, cfg, logger, router)
+}
+
+// seedDemo loads the demo catalog, customers and suppliers once.
+func seedDemo(cfg config.Config) error {
+	ctx := context.Background()
+	if err := database.MigrateUp(cfg.DatabaseURL); err != nil {
+		return err
+	}
+	pool, err := database.Connect(ctx, cfg.DatabaseURL)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+
+	result, err := seed.Demo(ctx, pool)
+	if err != nil {
+		return err
+	}
+	if result.Skipped {
+		fmt.Println("Ya hay productos cargados; no se cargó la demo.")
+		return nil
+	}
+	fmt.Printf("Demo cargada: %d productos, %d clientes, %d proveedores.\n", result.Products, result.Customers, result.Suppliers)
+	return nil
 }
 
 // createAdmin bootstraps the first administrator. The temporary password is printed
