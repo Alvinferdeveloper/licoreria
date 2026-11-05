@@ -1,5 +1,4 @@
 import { api, apiBlob, type FieldError, type Page } from "@/lib/api/client";
-import { toCents, type Cents } from "@/lib/money";
 
 export interface Ref {
   id: string;
@@ -149,5 +148,4 @@ export const catalogApi = {
     api<Master>("PATCH", `/${kind}/${id}/status`, { body: { active } }),
 };
 
-/** API amounts are decimal strings; the POS works in integer cents. */
-export const amountToCents = (amount: string): Cents => toCents(Number(amount));
+export { amountToCents } from "@/lib/money";

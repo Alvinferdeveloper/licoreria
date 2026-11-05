@@ -46,6 +46,12 @@ export function formatRate(rate: number): string {
   }).format(rate);
 }
 
+/** Cents to the API's decimal string: 125050 → "1250.50". */
+export const toAmountString = (cents: Cents): string => (cents / 100).toFixed(2);
+
+/** API decimal string to cents: "1250.50" → 125050. */
+export const amountToCents = (amount: string): Cents => toCents(Number(amount));
+
 /** Parses user input like "1,250.50" or "1250.5" into cents; null when invalid. */
 export function parseAmount(input: string): Cents | null {
   const normalized = input.replace(/[\s,]/g, "");

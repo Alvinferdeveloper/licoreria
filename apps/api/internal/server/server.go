@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"licoreria/api/internal/auth"
+	"licoreria/api/internal/cash"
 	"licoreria/api/internal/catalog"
 	"licoreria/api/internal/health"
 	"licoreria/api/internal/httpx"
@@ -23,6 +24,7 @@ import (
 	"licoreria/api/internal/platform/storage"
 	"licoreria/api/internal/products"
 	"licoreria/api/internal/purchases"
+	"licoreria/api/internal/rates"
 	"licoreria/api/internal/roles"
 	"licoreria/api/internal/users"
 )
@@ -79,6 +81,8 @@ func NewRouter(deps Deps) http.Handler {
 			parties.NewSupplierHandler(parties.NewSupplierService(deps.DB)).Routes(protected)
 			inventory.NewHandler(inventory.NewService(deps.DB, ledger)).Routes(protected)
 			purchases.NewHandler(purchases.NewService(deps.DB, ledger)).Routes(protected)
+			rates.NewHandler(rates.NewService(deps.DB)).Routes(protected)
+			cash.NewHandler(cash.NewService(deps.DB, deps.Config.AppBaseURL)).Routes(protected)
 		})
 	})
 	return r

@@ -1,0 +1,75 @@
+import { Money } from "@/components/money";
+import { amountToCents, type CurrencyCode } from "@/lib/money";
+import { cn } from "@/lib/cn";
+import type { Shift, ShiftSummary } from "../api";
+import { cashCopy } from "../copy";
+
+const copy = cashCopy.shift;
+
+/** What the drawer should hold per currency and how it got there. */
+export function ShiftBreakdown({ shift, summary }: { shift: Shift; summary: ShiftSummary }) {
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 md:grid-cols-2">
+        <CurrencyColumn
+          title={copy.nio}
+          currency="NIO"
+          expected={summary.expectedNio}
+          rows={[
+            [copy.breakdown.opening, shift.openingNio, 1],
+            [copy.breakdown.cashSales, summary.cashSalesNio, 1],
+            [copy.breakdown.change, summary.changeNio, -1],
+            [copy.breakdown.income, summary.incomeNio, 1],
+            [copy.breakdown.expense, summary.expenseNio, -1],
+          ]}
+        />
+        <CurrencyColumn
+          title={copy.usd}
+          currency="USD"
+          expected={summary.expectedUsd}
+          rows={[
+            [copy.breakdown.opening, shift.openingUsd, 1],
+            [copy.breakdown.cashSales, summary.cashSalesUsd, 1],
+            [copy.breakdown.change, summary.changeUsd, -1],
+            [copy.breakdown.income, summary.incomeUsd, 1],
+            [copy.breakdown.expense, summary.expenseUsd, -1],
+          ]}
+        />
+      </div>
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-md bg-sunken px-4 py-3 text-label">
+        <span className="text-ink-muted">{copy.sales(summary.salesCount)}</span>
+        <span className="text-ink-muted">{copy.other}:</span>
+        <span>
+          {copy.card} <Money cents={amountToCents(summary.cardNio)} className="font-mono" />
+        </span>
+        <span>
+          {copy.transfer} <Money cents={amountToCents(summary.transferNio)} className="font-mono" />
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function CurrencyColumn({ title, currency, expected, rows }: { title: string; currency: CurrencyCode; expected: string; rows: [string, string, 1 | -1][] }) {
+  return (
+    <section className="rounded-lg border border-line bg-surface p-5">
+      <p className="text-label text-ink-muted">
+        {copy.expected} · {title}
+      </p>
+      <p className="mt-1 text-headline font-semibold tracking-headline">
+        <Money cents={amountToCents(expected)} currency={currency} className="font-mono" />
+      </p>
+      <dl className="mt-4 space-y-1.5 border-t border-line pt-3 text-label">
+        {rows.map(([label, amount, sign]) => (
+          <div key={label} className="flex justify-between gap-4">
+            <dt className="text-ink-muted">{label}</dt>
+            <dd className={cn("font-mono tabular", amountToCents(amount) === 0 && "text-ink-subtle")}>
+              {sign < 0 && amountToCents(amount) > 0 ? "− " : ""}
+              <Money cents={amountToCents(amount)} currency={currency} />
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}

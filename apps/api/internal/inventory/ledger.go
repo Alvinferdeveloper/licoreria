@@ -106,31 +106,13 @@ func (l *Ledger) notifyLowStock(ctx context.Context, db database.DBTX, product, 
 	if err != nil {
 		return err
 	}
-	rows, err := db.Query(ctx, `
-		SELECT DISTINCT u.full_name, u.email::text FROM users u
-		JOIN role_permissions rp ON rp.role_id = u.role_id
-		JOIN permissions p ON p.id = rp.permission_id
-		WHERE u.active AND p.module = 'purchases' AND p.action = 'create'`)
+	recipients, err := mail.RecipientsWithPermission(ctx, db, "purchases", "create")
 	if err != nil {
-		return fmt.Errorf("list low stock recipients: %w", err)
-	}
-	type recipient struct{ name, email string }
-	var recipients []recipient
-	for rows.Next() {
-		var r recipient
-		if err := rows.Scan(&r.name, &r.email); err != nil {
-			rows.Close()
-			return fmt.Errorf("read low stock recipient: %w", err)
-		}
-		recipients = append(recipients, r)
-	}
-	rows.Close()
-	if err := rows.Err(); err != nil {
 		return err
 	}
 	for _, r := range recipients {
-		err := mail.Enqueue(ctx, db, mail.TemplateLowStock, r.email, map[string]any{
-			"StoreName": business.Name, "Name": r.name, "Product": product, "SKU": sku,
+		err := mail.Enqueue(ctx, db, mail.TemplateLowStock, r.Email, map[string]any{
+			"StoreName": business.Name, "Name": r.Name, "Product": product, "SKU": sku,
 			"Stock": stock, "MinStock": minStock, "AlertsURL": l.appBaseURL + "/inventario",
 		})
 		if err != nil {
