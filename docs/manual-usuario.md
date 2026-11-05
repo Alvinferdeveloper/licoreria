@@ -1,0 +1,144 @@
+# Manual de usuario
+
+Añejo es el sistema de punto de venta, inventario y facturación de la licorería. Este manual explica el trabajo diario por rol. Lo que cada persona ve en el menú depende de los permisos de su rol.
+
+| Rol | Qué hace |
+| --- | --- |
+| **Administrador** | Todo: usuarios, roles, configuración, respaldos y autorizaciones con PIN |
+| **Cajero** | Vende, cobra, abre y cierra su propia caja, atiende clientes |
+| **Bodeguero** | Recibe compras y ajusta inventario |
+| **Consulta** | Solo lectura de reportes y datos |
+
+## 1. Entrar al sistema
+
+1. Escribe tu usuario o correo y tu contraseña.
+2. La primera vez, entra con la contraseña temporal que llegó a tu correo. El sistema te pedirá cambiarla antes de continuar.
+3. Si la olvidaste, usa **¿Olvidaste tu contraseña?** y sigue el enlace del correo.
+
+Tras varios intentos fallidos la cuenta se bloquea unos minutos. La sesión se cierra sola si queda inactiva.
+
+El ícono de la luna o el sol, junto al nombre del sistema, cambia entre tema claro y oscuro.
+
+## 2. Empezar el día
+
+Para vender hacen falta dos cosas: la tasa del día y una caja abierta. Sin ellas el punto de venta se bloquea y explica qué falta.
+
+**Tasa del día (Administrador):** en **Vender > Tipo de cambio**, registra cuántos córdobas vale un dólar. Cada venta guarda la tasa que usó, así que corregirla no altera ventas anteriores.
+
+**Abrir caja (Cajero):** en **Vender > Mi caja**, elige tu caja, escribe el fondo inicial en córdobas y en dólares, y confirma.
+
+## 3. Vender
+
+Abre **Vender > Punto de venta**. Todo el flujo se puede hacer solo con teclado:
+
+| Tecla | Acción |
+| --- | --- |
+| `F2` | Ir al buscador |
+| `F4` | Cobrar |
+| `F8` | Poner la venta en espera |
+| `Enter` | Confirmar el cobro, o iniciar la venta siguiente |
+| `Esc` | Volver del cobro al carrito sin perder nada |
+
+**Paso a paso:**
+
+1. Escanea el código de barras o busca por nombre, marca o SKU. La búsqueda ignora acentos.
+2. Ajusta las cantidades en la cuenta.
+3. Si la factura va a nombre de alguien, elige el cliente o créalo ahí mismo. Por defecto es Consumidor final.
+4. Marca **Cliente mayor de 18 años verificado**. Es obligatorio.
+5. Pulsa `F4`, elige método y moneda, y registra lo entregado. Se pueden combinar pagos, por ejemplo dólares y córdobas.
+6. El sistema muestra el vuelto, siempre en córdobas. Confirma con `Enter`.
+7. Elige **Ticket**, **Factura PDF** o **Correo**, y pulsa `Enter` para la venta siguiente.
+
+**Descuentos.** Aplica sobre el total de la venta, en porcentaje o monto. Sobre el límite definido en Configuración, pide el usuario y PIN de un administrador.
+
+**Ventas en espera.** `F8` guarda el carrito para atender a otro cliente. Retómalo desde **En espera**.
+
+**Tarjeta y transferencia** no pueden cobrar más que el saldo. Solo el efectivo genera vuelto.
+
+## 4. Anular una venta
+
+En **Vender > Ventas**, abre la venta y pulsa **Anular**, con un motivo. Sin el permiso de anular, pide el PIN de un administrador. El stock vuelve solo y la factura queda marcada como anulada.
+
+Solo se puede anular mientras el turno de esa venta siga abierto. Las devoluciones de ventas de turnos ya cerrados aún no están disponibles en el sistema.
+
+## 5. Cerrar la caja
+
+En **Vender > Mi caja** el desglose muestra lo que debería haber por moneda. Para movimientos ajenos a las ventas, como pagar hielo o un flete, usa **Entrada o salida de efectivo**, siempre con motivo.
+
+Al final del turno, pulsa **Cerrar caja** y escribe lo que contaste en cada moneda. El sistema calcula la diferencia. Si no cuadra, queda registrada y se avisa por correo a los supervisores.
+
+El historial de todas las cajas está en **Vender > Turnos de caja**.
+
+## 6. Productos y catálogo
+
+- **Inventario > Productos:** crear, editar, buscar y desactivar productos. Un producto puede tener presentaciones, como six-pack o caja, con su propio código y precio.
+- **Importar:** carga masiva desde Excel o CSV. Descarga la plantilla, revisa la vista previa de errores y confirma. Solo entran las filas válidas.
+- **Categorías y marcas:** los datos maestros, incluidas las unidades de medida.
+
+Solo el Administrador ve los costos y cambia precios.
+
+## 7. Compras e inventario
+
+**Registrar una compra (Inventario > Compras):**
+
+1. Crea la compra con proveedor, fecha, número de factura y productos. Queda en borrador.
+2. Al llegar la mercadería, pulsa **Recibir**. El stock sube y se actualiza el costo promedio.
+
+Una compra recibida se puede anular mientras su stock siga disponible.
+
+**Existencias y kardex (Inventario > Existencias y kardex):**
+
+- **Por pedir:** los productos en su punto de reorden, agrupados por proveedor, con un botón para registrar la compra.
+- **Kardex:** cada entrada y salida con su saldo, responsable y origen. No se puede editar: una corrección siempre es un movimiento nuevo.
+- **Registrar ajuste:** un conteo físico o una merma, con motivo obligatorio.
+
+Cuando un producto cruza el mínimo, se envía un correo a quienes compran.
+
+## 8. Panel y reportes
+
+**Negocio > Panel** muestra las ventas del día, ticket promedio, utilidad, productos bajo mínimo y cinco gráficos: ventas por día, productos más vendidos, ventas por categoría, cobros por método y horas pico. Cada gráfico tiene **Ver tabla**. El cajero solo ve sus propias ventas.
+
+**Negocio > Reportes** ofrece 11 reportes con filtros, vista previa y exportación a Excel y PDF:
+
+- **Ventas:** por período, por producto y categoría, por cajero y cierres de caja, por caja y moneda, anuladas, utilidad y margen por producto.
+- **Inventario:** inventario valorizado, productos bajo mínimo, kardex por producto, compras por proveedor.
+- **Control:** bitácora de auditoría.
+
+## 9. Clientes y proveedores
+
+En **Personas** se administran clientes y proveedores. Consumidor final es el cliente por defecto y no se puede modificar. Los registros no se borran: se desactivan, para conservar el historial.
+
+## 10. Usuarios y roles (Administrador)
+
+- **Personas > Usuarios:** al crear un usuario, le llega un correo con su contraseña temporal. Desde ahí también se reenvía el acceso y se desactiva una cuenta.
+- **Sistema > Roles y permisos:** marca qué puede hacer cada rol. El cambio aplica de inmediato.
+- **PIN de autorización:** quien autoriza descuentos o anulaciones define su PIN en **Cambiar contraseña**, debajo de su nombre.
+
+## 11. Configuración (Administrador)
+
+En **Sistema > Configuración** se definen:
+
+- Nombre, RUC, dirección, teléfono y correo, que salen en facturas y tickets.
+- Logo de la factura, en PNG o JPG de hasta 2 MB.
+- IVA para productos nuevos. No cambia productos existentes ni facturas emitidas.
+- Porcentaje de descuento permitido sin autorización.
+- Formato de impresión por defecto y nota al pie.
+
+La numeración se lleva por caja. Cada una tiene su serie, que se administra en **Turnos de caja** y se bloquea tras la primera factura.
+
+## 12. Bitácora y respaldos (Administrador)
+
+**Sistema > Bitácora** registra quién hizo qué, cuándo y desde dónde. Nadie puede modificarla.
+
+**Sistema > Respaldos** crea, descarga, verifica y restaura copias de la base de datos. La guía completa está en [respaldos.md](respaldos.md).
+
+## Mensajes frecuentes
+
+| Mensaje | Qué hacer |
+| --- | --- |
+| Falta la tasa del día | Un administrador la registra en Tipo de cambio |
+| Sin caja abierta | Abre tu turno en Mi caja |
+| No queda más stock | Revisa el kardex o registra la compra pendiente |
+| Este descuento supera tu límite | Pide el usuario y PIN de un administrador |
+| El turno de esa venta ya cerró | La venta ya no se puede anular |
+| El almacenamiento de imágenes no está configurado | Faltan las credenciales de Supabase en el servidor |

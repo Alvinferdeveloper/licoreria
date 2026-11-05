@@ -1,0 +1,9 @@
+**/node_modules
+**/.next
+**/.env*
+**/*.tsbuildinfo
+.git
+.github
+docs
+deploy
+apps/api

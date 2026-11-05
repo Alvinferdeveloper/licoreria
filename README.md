@@ -2,7 +2,7 @@
 
 Punto de venta, inventario (kardex), compras, caja por turnos y facturación para una licorería en Nicaragua, con cobro en córdobas y dólares.
 
-> Proyecto de examen de grado. En construcción.
+> Proyecto de examen de grado.
 
 ## Stack
 
@@ -22,9 +22,9 @@ licoreria/
 ├── apps/
 │   ├── web/        # Frontend Next.js
 │   └── api/        # API REST en Go (ver apps/api/README.md)
-├── compose.yaml    # base de datos y API (Podman o Docker)
-├── deploy/         # proxy y scripts de respaldo
-├── docs/           # requisitos, diagrama ER, manual de usuario
+├── compose.yaml    # todos los servicios (Podman o Docker)
+├── deploy/         # proxy HTTPS
+├── docs/           # instalación, manual de usuario, diagrama ER, guion de demo
 └── .github/        # CI
 ```
 
@@ -38,14 +38,13 @@ licoreria/
 
 Copia `.env.example` a `.env` y define `DB_PASSWORD`.
 
-**Todo en contenedores** (base de datos y API en http://localhost:8080):
+**Todo en contenedores** (aplicación en http://localhost:3000):
 
 ```bash
 podman compose up -d --build   # o: docker compose up -d --build
-curl http://localhost:8080/api/v1/health
 ```
 
-La documentación interactiva de la API queda en http://localhost:8080/api/v1/docs (contrato en `apps/api/openapi.yaml`).
+La guía completa, con el primer administrador, los datos de demostración y el despliegue con HTTPS, está en [docs/instalacion.md](docs/instalacion.md). La documentación interactiva de la API queda en http://localhost:8080/api/v1/docs (contrato en `apps/api/openapi.yaml`).
 
 **Desarrollo** (base de datos en contenedor, API y web en local):
 

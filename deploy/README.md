@@ -1,3 +1,3 @@
 # Despliegue
 
-compose.yaml (Podman o Docker), proxy con HTTPS y scripts de respaldo.
+`Caddyfile` configura el proxy HTTPS del servicio `proxy` de `compose.yaml`, que solo arranca con `--profile production`. Los pasos completos están en [docs/instalacion.md](../docs/instalacion.md).
