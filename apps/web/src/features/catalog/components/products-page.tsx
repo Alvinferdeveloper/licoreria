@@ -1,14 +1,15 @@
 "use client";
 
-import { ImageSquare, PencilSimple, Plus, Warning, XCircle } from "@phosphor-icons/react";
+import { FileArrowUp, ImageSquare, PencilSimple, Plus, Warning, XCircle } from "@phosphor-icons/react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Link from "next/link";
 import { useDeferredValue, useState } from "react";
 import { DataTable, RowActions, type Column } from "@/components/data/data-table";
 import { FilterChips, NoticeBanner, Pagination, SearchInput, STATUS_OPTIONS, useNotice, type StatusFilter } from "@/components/data/toolbar";
 import { Money } from "@/components/money";
 import { PageHeader } from "@/components/shell/page-header";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { ConfirmButton } from "@/components/ui/confirm-button";
 import { inputClassName } from "@/components/ui/field";
 import { Sheet } from "@/components/ui/sheet";
@@ -127,10 +128,18 @@ export function ProductsPage() {
         description={copy.description}
         actions={
           can(me, "products:create") && (
-            <Button variant="primary" onClick={() => setSheet({ open: true, product: null })}>
-              <Plus size={16} weight="bold" aria-hidden />
-              {copy.create}
-            </Button>
+            <>
+              {can(me, "products:authorize") && (
+                <Link href="/productos/importar" className={buttonVariants()}>
+                  <FileArrowUp size={16} weight="bold" aria-hidden />
+                  {copy.import}
+                </Link>
+              )}
+              <Button variant="primary" onClick={() => setSheet({ open: true, product: null })}>
+                <Plus size={16} weight="bold" aria-hidden />
+                {copy.create}
+              </Button>
+            </>
           )
         }
       />

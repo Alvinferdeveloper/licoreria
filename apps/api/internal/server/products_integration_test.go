@@ -6,15 +6,71 @@ import (
 	"testing"
 )
 
-func TestProductCostVisibilityAndPriceRules(t *testing.T) {
-	env := newTestEnv(t)
+func resetCatalog(env *testEnv) {
+	env.t.Helper()
 	if _, err := env.pool.Exec(context.Background(), `
 		ALTER TABLE inventory_movements DISABLE TRIGGER inventory_movements_immutable;
 		DELETE FROM inventory_movements;
 		ALTER TABLE inventory_movements ENABLE TRIGGER inventory_movements_immutable;
 		DELETE FROM product_presentations; DELETE FROM products; DELETE FROM categories; DELETE FROM brands;`); err != nil {
-		t.Fatal(err)
+		env.t.Fatal(err)
 	}
+}
+
+func TestProductImport(t *testing.T) {
+	env := newTestEnv(t)
+	resetCatalog(env)
+	admin := env.createAdmin()
+	cashier := env.createCashier(admin)
+	ctx := context.Background()
+
+	category := admin.do(http.MethodPost, "/categories", map[string]string{"name": "Ron"})
+	expectStatus(t, category, http.StatusCreated, "create category")
+	var unitID string
+	_ = env.pool.QueryRow(ctx, `SELECT id FROM units WHERE abbreviation = 'bot'`).Scan(&unitID)
+	expectStatus(t, admin.do(http.MethodPost, "/products", map[string]any{
+		"sku": "EXISTE", "barcode": "7430000000001", "name": "Ron existente", "categoryId": category.body["id"], "unitId": unitID, "price": "100",
+	}), http.StatusCreated, "seed product")
+
+	csv := []byte("sku;codigo_barras;nombre;categoria;marca;unidad;precio;costo\n" +
+		"r-1;7430000000002;Ron Uno;ron;Casa Nueva;bot;C$ 1,250.50;900\n" +
+		"R-2;;Ron Dos;Ron;;Botella;421,75;\n" +
+		"r-1;;Repetido;Ron;;bot;10;\n" +
+		"EXISTE;;Ya existe;Ron;;bot;10;\n" +
+		"R-3;7430000000001;Código usado;Whisky;;bot;diez;\n")
+
+	expectStatus(t, cashier.upload("/products/import?dryRun=true", "file", "productos.csv", csv), http.StatusForbidden, "cashier import")
+
+	preview := admin.upload("/products/import?dryRun=true", "file", "productos.csv", csv)
+	expectStatus(t, preview, http.StatusOK, "preview")
+	if preview.body["valid"] != 2.0 || preview.body["invalid"] != 3.0 || preview.body["created"] != 0.0 {
+		t.Fatalf("unexpected preview summary: %v", preview.body)
+	}
+	last := preview.body["rows"].([]any)[4].(map[string]any)
+	if n := len(last["errors"].([]any)); n != 3 {
+		t.Errorf("row 6 should report barcode, category and price errors, got %v", last["errors"])
+	}
+	var count int
+	_ = env.pool.QueryRow(ctx, `SELECT count(*) FROM products`).Scan(&count)
+	if count != 1 {
+		t.Fatalf("a dry run must not insert, products = %d", count)
+	}
+
+	result := admin.upload("/products/import", "file", "productos.csv", csv)
+	expectStatus(t, result, http.StatusOK, "import")
+	if result.body["created"] != 2.0 {
+		t.Fatalf("created = %v, want 2", result.body["created"])
+	}
+	var price, brand string
+	if err := env.pool.QueryRow(ctx, `SELECT p.price::text, b.name FROM products p JOIN brands b ON b.id = p.brand_id WHERE p.sku = 'R-1'`).
+		Scan(&price, &brand); err != nil || price != "1250.50" || brand != "Casa Nueva" {
+		t.Errorf("R-1 = %s %s (%v), want 1250.50 with the new brand", price, brand, err)
+	}
+}
+
+func TestProductCostVisibilityAndPriceRules(t *testing.T) {
+	env := newTestEnv(t)
+	resetCatalog(env)
 	admin := env.createAdmin()
 	cashier := env.createCashier(admin)
 

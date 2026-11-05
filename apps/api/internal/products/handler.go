@@ -25,6 +25,8 @@ func (h *Handler) Routes(r chi.Router) {
 		r.With(auth.Require("products", "view")).Get("/", h.list)
 		r.With(auth.Require("products", "view")).Get("/lookup", h.lookup)
 		r.With(auth.Require("products", "create")).Post("/", h.create)
+		r.With(auth.Require("products", "create")).Get("/import/template", h.importTemplate)
+		r.With(auth.Require("products", "create")).Post("/import", h.importFile)
 		r.With(auth.Require("products", "view")).Get("/{id}", h.get)
 		r.With(auth.Require("products", "update")).Put("/{id}", h.update)
 		r.With(auth.Require("products", "delete")).Patch("/{id}/status", h.setStatus)
@@ -240,6 +242,42 @@ func (h *Handler) uploadImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, r, http.StatusOK, product)
+}
+
+// importFile accepts multipart/form-data with the sheet in the "file" field. With
+// ?dryRun=true it only returns the row-by-row preview.
+func (h *Handler) importFile(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, MaxImportBytes+64<<10)
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		httpx.Fail(w, r, ErrImportFile)
+		return
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(io.LimitReader(file, MaxImportBytes+1))
+	if err != nil || len(data) == 0 || len(data) > MaxImportBytes {
+		httpx.Fail(w, r, ErrImportFile)
+		return
+	}
+	p, _ := auth.FromContext(r.Context())
+	report, err := h.svc.Import(r.Context(), p, data, r.URL.Query().Get("dryRun") == "true")
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	httpx.JSON(w, r, http.StatusOK, report)
+}
+
+func (h *Handler) importTemplate(w http.ResponseWriter, r *http.Request) {
+	data, err := h.svc.ImportTemplate(r.Context())
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	w.Header().Set("Content-Disposition", `attachment; filename="plantilla-productos.xlsx"`)
+	_, _ = w.Write(data)
 }
 
 func (h *Handler) removeImage(w http.ResponseWriter, r *http.Request) {

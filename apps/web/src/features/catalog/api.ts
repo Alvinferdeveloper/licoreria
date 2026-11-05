@@ -1,4 +1,4 @@
-import { api, type Page } from "@/lib/api/client";
+import { api, apiBlob, type FieldError, type Page } from "@/lib/api/client";
 import { toCents, type Cents } from "@/lib/money";
 
 export interface Ref {
@@ -84,7 +84,28 @@ export interface Master {
   productCount: number;
 }
 
-export type MasterKind = "categories" | "brands" | "units";
+export interface ImportRow {
+  line: number;
+  sku: string;
+  name: string;
+  category: string;
+  brand: string;
+  price: string;
+  newBrand: boolean;
+  /** Empty when the row can be imported; `field` is the file's column name. */
+  errors: FieldError[];
+}
+
+export interface ImportReport {
+  total: number;
+  valid: number;
+  invalid: number;
+  created: number;
+  newBrands: string[];
+  rows: ImportRow[];
+}
+
+export type MasterKind ="categories" | "brands" | "units";
 
 export const catalogKeys = {
   products: ["products"] as const,
@@ -112,6 +133,12 @@ export const catalogApi = {
     return api<Product>("POST", `/products/${id}/image`, { form });
   },
   removeImage: (id: string) => api<Product>("DELETE", `/products/${id}/image`),
+  importProducts: (file: File, dryRun: boolean) => {
+    const form = new FormData();
+    form.set("file", file);
+    return api<ImportReport>("POST", `/products/import${dryRun ? "?dryRun=true" : ""}`, { form });
+  },
+  importTemplate: () => apiBlob("/products/import/template"),
 
   masters: (kind: MasterKind) => api<{ data: Master[] }>("GET", `/${kind}`).then((r) => r.data),
   createMaster: (kind: MasterKind, body: { name: string; abbreviation?: string; parentId?: string | null }) =>

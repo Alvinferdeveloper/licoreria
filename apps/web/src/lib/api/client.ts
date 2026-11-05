@@ -69,6 +69,25 @@ export async function api<T>(method: Method, path: string, init: RequestOptions 
   return parse<T>(response);
 }
 
+/** GET a binary response (generated spreadsheets, PDFs) with the same session handling as `api`. */
+export async function apiBlob(path: string): Promise<Blob> {
+  let response = await send("GET", path, {}, options.getAccessToken());
+  if (response.status === 401) {
+    const token = await options.refreshSession();
+    if (token) response = await send("GET", path, {}, token);
+  }
+  if (!response.ok) return parse<never>(response);
+  return response.blob();
+}
+
+/** Hands a blob to the browser as a file download. */
+export function saveBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = Object.assign(document.createElement("a"), { href: url, download: filename });
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
 async function send(method: Method, path: string, init: RequestOptions, token: string | null) {
   const headers: Record<string, string> = {};
   if (init.body !== undefined) headers["Content-Type"] = "application/json";

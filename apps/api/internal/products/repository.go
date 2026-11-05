@@ -16,6 +16,7 @@ import (
 
 	"licoreria/api/internal/httpx"
 	"licoreria/api/internal/platform/database"
+	"licoreria/api/internal/platform/textx"
 )
 
 type Ref struct {
@@ -287,6 +288,88 @@ func (Repository) barcodeTaken(ctx context.Context, db database.DBTX, code strin
 		return false, fmt.Errorf("check barcode: %w", err)
 	}
 	return taken, nil
+}
+
+// importRefs are the lookups an import validates against, keyed by textx.Fold (names) or
+// upper-case SKU.
+type importRefs struct {
+	categories map[string][]uuid.UUID
+	units      map[string]uuid.UUID
+	brands     map[string]uuid.UUID
+	takenSKUs  map[string]bool
+	takenCodes map[string]bool
+}
+
+func (Repository) importRefs(ctx context.Context, db database.DBTX, skus, codes []string) (importRefs, error) {
+	refs := importRefs{categories: map[string][]uuid.UUID{}, units: map[string]uuid.UUID{}, brands: map[string]uuid.UUID{},
+		takenSKUs: map[string]bool{}, takenCodes: map[string]bool{}}
+	rows, err := db.Query(ctx, `
+		SELECT 'category', id, name FROM categories WHERE active
+		UNION ALL SELECT 'brand', id, name::text FROM brands
+		UNION ALL SELECT 'unit', id, name::text FROM units
+		UNION ALL SELECT 'unit', id, abbreviation::text FROM units
+		UNION ALL SELECT 'sku', id, upper(sku::text) FROM products WHERE sku = ANY($1::text[]::citext[])
+		UNION ALL SELECT 'code', id, barcode FROM products WHERE barcode = ANY($2)
+		UNION ALL SELECT 'code', id, barcode FROM product_presentations WHERE barcode = ANY($2)`, skus, codes)
+	if err != nil {
+		return refs, fmt.Errorf("load import references: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var kind, value string
+		var id uuid.UUID
+		if err := rows.Scan(&kind, &id, &value); err != nil {
+			return refs, fmt.Errorf("read import references: %w", err)
+		}
+		switch kind {
+		case "category":
+			refs.categories[textx.Fold(value)] = append(refs.categories[textx.Fold(value)], id)
+		case "brand":
+			refs.brands[textx.Fold(value)] = id
+		case "unit":
+			refs.units[textx.Fold(value)] = id
+		case "sku":
+			refs.takenSKUs[value] = true
+		case "code":
+			refs.takenCodes[value] = true
+		}
+	}
+	return refs, rows.Err()
+}
+
+func (Repository) ensureBrand(ctx context.Context, db database.DBTX, name string) (uuid.UUID, error) {
+	var id uuid.UUID
+	err := db.QueryRow(ctx, `
+		INSERT INTO brands (name) VALUES ($1)
+		ON CONFLICT (name) DO UPDATE SET name = brands.name RETURNING id`, name).Scan(&id)
+	return id, database.MapError(err, nil)
+}
+
+// masterNames lists active category names and units as {name, abbreviation}.
+func (Repository) masterNames(ctx context.Context, db database.DBTX) ([]string, [][2]string, error) {
+	rows, err := db.Query(ctx, `
+		SELECT name, abbreviation FROM (
+			SELECT name, '' AS abbreviation FROM categories WHERE active
+			UNION ALL SELECT name::text, abbreviation::text FROM units) m
+		ORDER BY lower(name)`)
+	if err != nil {
+		return nil, nil, fmt.Errorf("list master names: %w", err)
+	}
+	defer rows.Close()
+	var categories []string
+	var units [][2]string
+	for rows.Next() {
+		var name, abbreviation string
+		if err := rows.Scan(&name, &abbreviation); err != nil {
+			return nil, nil, fmt.Errorf("read master names: %w", err)
+		}
+		if abbreviation == "" {
+			categories = append(categories, name)
+		} else {
+			units = append(units, [2]string{name, abbreviation})
+		}
+	}
+	return categories, units, rows.Err()
 }
 
 func (Repository) setActive(ctx context.Context, db database.DBTX, id uuid.UUID, active bool) error {

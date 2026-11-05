@@ -13,11 +13,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"golang.org/x/text/runes"
-	"golang.org/x/text/transform"
-	"golang.org/x/text/unicode/norm"
-
 	"licoreria/api/internal/platform/database"
+	"licoreria/api/internal/platform/textx"
 )
 
 var ErrNoAdmin = errors.New("create an administrator first (api create-admin)")
@@ -222,7 +219,7 @@ func stockFor(name, category string) (stock, minStock int) {
 func sku(brand, name string, seq int) string {
 	code := func(s string, n int) string {
 		var out []rune
-		for _, r := range strings.ToUpper(stripAccents(s)) {
+		for _, r := range strings.ToUpper(textx.StripAccents(s)) {
 			if unicode.IsLetter(r) || unicode.IsDigit(r) {
 				out = append(out, r)
 			}
@@ -233,11 +230,6 @@ func sku(brand, name string, seq int) string {
 		return string(out)
 	}
 	return fmt.Sprintf("%s-%s-%03d", code(brand, 3), code(strings.TrimPrefix(name, brand), 3), seq)
-}
-
-func stripAccents(s string) string {
-	result, _, _ := transform.String(transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC), s)
-	return result
 }
 
 func round2(v float64) float64 { return math.Round(v*100) / 100 }
