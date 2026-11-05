@@ -1,13 +1,15 @@
 "use client";
 
 import { Barcode, MagnifyingGlass, WarningCircle } from "@phosphor-icons/react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useDeferredValue, useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { Kbd } from "@/components/ui/kbd";
+import { catalogApi, catalogKeys } from "@/features/catalog/api";
+import { ApiError } from "@/lib/api/client";
 import { cn } from "@/lib/cn";
 import { posCopy } from "../copy";
-import { CATEGORIES } from "../data/catalog";
-import { findByCode, searchProducts } from "../data/search";
-import { availableStock, type CategoryId, type Product } from "../domain";
+import { toPosProduct } from "../data/products";
+import { availableStock, type PosPresentation, type PosProduct } from "../domain";
 import { POS_SEARCH_INPUT_ID } from "../hooks/search-focus";
 import { usePosStore } from "../store/pos-store";
 import { CategoryFilter } from "./category-filter";
@@ -16,27 +18,30 @@ import { ProductRow } from "./product-row";
 const LISTBOX_ID = "pos-results";
 const optionId = (productId: string) => `pos-option-${productId}`;
 
+/** Scanner input and typed SKUs: a single token of letters, digits and dashes with at least one digit. */
+const looksLikeCode = (value: string) => /^[A-Za-z0-9-]{4,}$/.test(value) && /\d/.test(value);
+
 interface ProductSearchProps {
   /** Locks the catalog while a sale is being charged. */
   locked: boolean;
 }
 
 export function ProductSearch({ locked }: ProductSearchProps) {
-  const products = usePosStore((state) => state.products);
   const lines = usePosStore((state) => state.lines);
   const notice = usePosStore((state) => state.notice);
   const addToCart = usePosStore((state) => state.addToCart);
   const setNotice = usePosStore((state) => state.setNotice);
 
   const [query, setQuery] = useState("");
-  const [category, setCategory] = useState<CategoryId | null>(null);
+  const [category, setCategory] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const deferredQuery = useDeferredValue(query);
 
-  const results = useMemo(
-    () => searchProducts(products, deferredQuery, category),
-    [products, deferredQuery, category],
-  );
+  const filters = { search: deferredQuery, categoryId: category ?? "", active: "true" as const, lowStock: false, page: 1, pageSize: 40 };
+  const search = useQuery({ queryKey: catalogKeys.productList(filters), queryFn: () => catalogApi.products(filters), placeholderData: keepPreviousData });
+  const categories = useQuery({ queryKey: catalogKeys.masters("categories"), queryFn: () => catalogApi.masters("categories") });
+
+  const results = useMemo(() => (search.data?.data ?? []).map(toPosProduct), [search.data]);
   const active = results[Math.min(activeIndex, results.length - 1)];
 
   useEffect(() => {
@@ -44,8 +49,8 @@ export function ProductSearch({ locked }: ProductSearchProps) {
     document.getElementById(optionId(active.id))?.scrollIntoView({ block: "nearest" });
   }, [active]);
 
-  const select = (product: Product) => {
-    if (addToCart(product)) {
+  const select = (product: PosProduct, presentation: PosPresentation | null = null) => {
+    if (addToCart(product, presentation)) {
       setQuery("");
       setActiveIndex(0);
     } else {
@@ -53,19 +58,32 @@ export function ProductSearch({ locked }: ProductSearchProps) {
     }
   };
 
-  const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+  const addScanned = async (code: string) => {
+    try {
+      const { product, presentationId } = await catalogApi.lookup(code);
+      const pos = toPosProduct(product);
+      select(pos, pos.presentations.find((p) => p.id === presentationId) ?? null);
+      return true;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) return false;
+      setNotice(error instanceof ApiError ? error.message : posCopy.search.notFound(code));
+      return true;
+    }
+  };
+
+  const onKeyDown = async (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       const step = event.key === "ArrowDown" ? 1 : -1;
       setActiveIndex((index) => Math.max(0, Math.min(index + step, results.length - 1)));
       return;
     }
-    if (event.key !== "Enter" || !query.trim()) return;
+    const value = query.trim();
+    if (event.key !== "Enter" || !value) return;
     event.preventDefault();
-    const scanned = findByCode(products, query);
-    if (scanned) return select(scanned);
-    if (active) return select(active);
-    setNotice(posCopy.search.notFound(query.trim()));
+    if (looksLikeCode(value) && (await addScanned(value))) return;
+    if (active && deferredQuery === query) return select(active);
+    setNotice(posCopy.search.notFound(value));
   };
 
   return (
@@ -110,7 +128,7 @@ export function ProductSearch({ locked }: ProductSearchProps) {
 
       <div className="flex items-center justify-between gap-4">
         <CategoryFilter
-          categories={CATEGORIES}
+          categories={(categories.data ?? []).filter((c) => c.active && c.productCount > 0)}
           value={category}
           onChange={(next) => {
             setCategory(next);
@@ -118,7 +136,7 @@ export function ProductSearch({ locked }: ProductSearchProps) {
           }}
         />
         <span className="shrink-0 text-caption text-ink-subtle" aria-live="polite">
-          {posCopy.search.resultsCount(results.length)}
+          {posCopy.search.resultsCount(search.data?.meta.total ?? 0)}
         </span>
       </div>
 
@@ -145,15 +163,24 @@ export function ProductSearch({ locked }: ProductSearchProps) {
               product={product}
               available={availableStock(product, lines)}
               active={product.id === active?.id}
-              onSelect={() => select(product)}
+              onSelect={(presentation) => select(product, presentation)}
               onHover={() => setActiveIndex(index)}
             />
           ))}
         </ul>
+      ) : search.isPending ? (
+        <ul className="-mx-2 space-y-0.5 px-2" aria-hidden>
+          {Array.from({ length: 8 }, (_, i) => (
+            <li key={i} className="flex items-center justify-between rounded-md px-3 py-3.5">
+              <span className="h-3 w-1/2 animate-pulse rounded-xs bg-sunken" />
+              <span className="h-3 w-20 animate-pulse rounded-xs bg-sunken" />
+            </li>
+          ))}
+        </ul>
       ) : (
         <div className="grid flex-1 place-content-center gap-1 text-center">
-          <p className="text-title font-semibold">{posCopy.search.emptyTitle}</p>
-          <p className="max-w-xs text-ink-muted">{posCopy.search.emptyBody}</p>
+          <p className="text-title font-semibold">{search.isError ? posCopy.search.errorTitle : posCopy.search.emptyTitle}</p>
+          <p className="max-w-xs text-ink-muted">{search.isError ? posCopy.search.errorBody : posCopy.search.emptyBody}</p>
         </div>
       )}
     </section>

@@ -6,6 +6,7 @@ export const LOGIN_PATH = "/login";
 /** Destinations in priority order; the first one the user may open is their home. */
 const HOME_CANDIDATES: readonly { path: string; permission: string }[] = [
   { path: "/pos", permission: "pos:view" },
+  { path: "/productos", permission: "products:view" },
   { path: "/usuarios", permission: "users:view" },
   { path: "/roles", permission: "roles:view" },
 ];

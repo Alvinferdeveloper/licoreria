@@ -1,45 +1,48 @@
 import { describe, expect, it } from "vitest";
-import { addProduct, computeTotals, setQuantity, stockLevel } from "./cart";
-import type { Product } from "./types";
+import { addProduct, computeTotals, setQuantity, unitsInCart } from "./cart";
+import type { CartLine, PosProduct } from "./types";
 
-const rum: Product = {
+const beer: PosProduct = {
   id: "p1",
-  sku: "RUM-7-750",
-  barcode: "7401000000017",
-  name: "Flor de Caña 7 años",
-  brand: "Flor de Caña",
-  categoryId: "rum",
-  presentation: "750 ml",
-  price: 42000,
+  sku: "TON-LAT",
+  barcode: "7430020003550",
+  name: "Toña lata",
+  detail: "355 ml",
+  imageUrl: null,
+  price: 3130,
   taxPercent: 15,
-  stock: 2,
-  minStock: 3,
+  stock: 8,
+  minStock: 6,
+  allowNegativeStock: false,
+  presentations: [{ id: "six", name: "Six-pack", factor: 6, price: 18200 }],
 };
+const sixPack = beer.presentations[0];
 
 describe("cart", () => {
-  it("merges repeated products into one line", () => {
-    const lines = addProduct(addProduct([], rum), rum);
-    expect(lines).toHaveLength(1);
-    expect(lines[0].quantity).toBe(2);
+  it("keeps units and packs of the same product on separate lines", () => {
+    const lines = addProduct(addProduct([], beer)!, beer, sixPack)!;
+    expect(lines).toHaveLength(2);
+    expect(unitsInCart(beer.id, lines)).toBe(7);
   });
 
-  it("never exceeds available stock", () => {
-    const lines = addProduct(addProduct(addProduct([], rum), rum), rum);
-    expect(lines[0].quantity).toBe(2);
+  it("refuses to exceed stock counted in base units", () => {
+    const lines = addProduct([], beer, sixPack)!;
+    expect(addProduct(lines, beer, sixPack)).toBeNull();
+    expect(addProduct(addProduct(lines, beer)!, beer)).not.toBeNull();
+    expect(addProduct(addProduct(addProduct(lines, beer)!, beer)!, beer)).toBeNull();
+  });
+
+  it("lets products allowed to go negative sell past stock", () => {
+    expect(addProduct([], { ...beer, stock: 0, allowNegativeStock: true })).not.toBeNull();
   });
 
   it("removes a line when quantity drops to zero", () => {
-    expect(setQuantity(addProduct([], rum), rum.id, 0)).toEqual([]);
+    const lines = addProduct([], beer)!;
+    expect(setQuantity(lines, lines[0].key, 0)).toEqual([]);
   });
 
   it("computes subtotal, tax and total in cents", () => {
-    const totals = computeTotals(addProduct(addProduct([], rum), rum));
-    expect(totals).toEqual({ subtotal: 84000, discount: 0, tax: 12600, total: 96600, itemCount: 2 });
-  });
-
-  it("classifies stock levels", () => {
-    expect(stockLevel({ stock: 0, minStock: 3 })).toBe("out");
-    expect(stockLevel({ stock: 3, minStock: 3 })).toBe("low");
-    expect(stockLevel({ stock: 10, minStock: 3 })).toBe("ok");
+    const lines: CartLine[] = addProduct(addProduct([], beer)!, beer, sixPack)!;
+    expect(computeTotals(lines)).toEqual({ subtotal: 21330, discount: 0, tax: 3200, total: 24530, itemCount: 2 });
   });
 });

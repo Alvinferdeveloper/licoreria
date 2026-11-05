@@ -1,6 +1,6 @@
 "use client";
 
-import { CashRegister, ShieldCheck, SignOut, UsersThree, type Icon } from "@phosphor-icons/react";
+import { AddressBook, CashRegister, ShieldCheck, SignOut, Tag, Truck, UsersThree, Wine, type Icon } from "@phosphor-icons/react";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -21,12 +21,21 @@ interface NavItem {
 const NAV: readonly { label: string; items: readonly NavItem[] }[] = [
   { label: "Vender", items: [{ href: "/pos", label: "Punto de venta", icon: CashRegister, permission: "pos:view" }] },
   {
-    label: "Sistema",
+    label: "Inventario",
     items: [
-      { href: "/usuarios", label: "Usuarios", icon: UsersThree, permission: "users:view" },
-      { href: "/roles", label: "Roles y permisos", icon: ShieldCheck, permission: "roles:view" },
+      { href: "/productos", label: "Productos", icon: Wine, permission: "products:view" },
+      { href: "/categorias", label: "Categorías y marcas", icon: Tag, permission: "categories:view" },
     ],
   },
+  {
+    label: "Personas",
+    items: [
+      { href: "/clientes", label: "Clientes", icon: AddressBook, permission: "customers:view" },
+      { href: "/proveedores", label: "Proveedores", icon: Truck, permission: "suppliers:view" },
+      { href: "/usuarios", label: "Usuarios", icon: UsersThree, permission: "users:view" },
+    ],
+  },
+  { label: "Sistema", items: [{ href: "/roles", label: "Roles y permisos", icon: ShieldCheck, permission: "roles:view" }] },
 ];
 
 export function AppShell({ children }: { children: ReactNode }) {

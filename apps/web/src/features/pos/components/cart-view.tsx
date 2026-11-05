@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Kbd } from "@/components/ui/kbd";
 import { posCopy } from "../copy";
+import { fitsInStock } from "../domain";
 import { focusSearch } from "../hooks/search-focus";
 import { DEMO_SESSION } from "../data/session";
 import { POS_EXCHANGE_RATE, usePosStore } from "../store/pos-store";
@@ -15,6 +16,7 @@ import { CartLineItem } from "./cart-line-item";
 export function CartView() {
   const lines = usePosStore((state) => state.lines);
   const products = usePosStore((state) => state.products);
+  const setNotice = usePosStore((state) => state.setNotice);
   const flash = usePosStore((state) => state.flash);
   const ageVerified = usePosStore((state) => state.ageVerified);
   const changeQuantity = usePosStore((state) => state.changeQuantity);
@@ -23,7 +25,6 @@ export function CartView() {
   const startCheckout = usePosStore((state) => state.startCheckout);
   const totals = useCartTotals();
 
-  const stockOf = (productId: string) => products.find((product) => product.id === productId)?.stock ?? 0;
   const isEmpty = lines.length === 0;
 
   return (
@@ -58,11 +59,13 @@ export function CartView() {
         <ul className="min-h-0 flex-1 divide-y divide-line overflow-y-auto" aria-label={posCopy.bill.title}>
           {lines.map((line) => (
             <CartLineItem
-              key={line.productId}
+              key={line.key}
               line={line}
-              maxQuantity={stockOf(line.productId)}
-              flashNonce={flash?.productId === line.productId ? flash.nonce : null}
-              onQuantityChange={(quantity) => changeQuantity(line.productId, quantity)}
+              canIncrease={!products[line.productId] || fitsInStock(products[line.productId], lines, line.unitsPerItem)}
+              flashNonce={flash?.key === line.key ? flash.nonce : null}
+              onQuantityChange={(quantity) => {
+                if (!changeQuantity(line.key, quantity)) setNotice(posCopy.search.noMoreStock(line.name));
+              }}
             />
           ))}
         </ul>

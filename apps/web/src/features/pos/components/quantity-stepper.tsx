@@ -6,11 +6,11 @@ import { posCopy } from "../copy";
 
 interface QuantityStepperProps {
   value: number;
-  max: number;
+  canIncrease: boolean;
   onChange: (value: number) => void;
 }
 
-export function QuantityStepper({ value, max, onChange }: QuantityStepperProps) {
+export function QuantityStepper({ value, canIncrease, onChange }: QuantityStepperProps) {
   return (
     <div className="flex items-center rounded-md border border-line bg-surface">
       <Button variant="ghost" size="icon-sm" aria-label={posCopy.bill.decrease} onClick={() => onChange(value - 1)}>
@@ -23,7 +23,7 @@ export function QuantityStepper({ value, max, onChange }: QuantityStepperProps) 
         variant="ghost"
         size="icon-sm"
         aria-label={posCopy.bill.increase}
-        disabled={value >= max}
+        disabled={!canIncrease}
         onClick={() => onChange(value + 1)}
       >
         <Plus size={14} weight="bold" />

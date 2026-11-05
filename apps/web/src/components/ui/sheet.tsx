@@ -2,6 +2,7 @@
 
 import { X } from "@phosphor-icons/react";
 import { useEffect, useRef, type ReactNode } from "react";
+import { cn } from "@/lib/cn";
 import { Button } from "./button";
 
 interface SheetProps {
@@ -11,10 +12,11 @@ interface SheetProps {
   description?: string;
   children: ReactNode;
   footer?: ReactNode;
+  size?: "md" | "lg";
 }
 
 /** Side panel on a native <dialog>: focus trap, Esc to close and inert background come built in. */
-export function Sheet({ open, onClose, title, description, children, footer }: SheetProps) {
+export function Sheet({ open, onClose, title, description, children, footer, size = "md" }: SheetProps) {
   const ref = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
@@ -30,7 +32,10 @@ export function Sheet({ open, onClose, title, description, children, footer }: S
       onClose={onClose}
       onClick={(event) => event.target === ref.current && onClose()}
       aria-labelledby="sheet-title"
-      className="sheet fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-dvh w-full max-w-md bg-surface p-0 text-ink shadow-(--shadow-float-high) backdrop:bg-[oklch(18.5%_0.01_60/0.4)]"
+      className={cn(
+        "sheet fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-dvh w-full bg-surface p-0 text-ink shadow-(--shadow-float-high) backdrop:bg-[oklch(18.5%_0.01_60/0.4)]",
+        size === "lg" ? "max-w-2xl" : "max-w-md",
+      )}
     >
       {open && (
         <div className="flex h-full flex-col">

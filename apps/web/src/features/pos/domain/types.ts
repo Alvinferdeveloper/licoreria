@@ -1,34 +1,43 @@
 import type { Cents, CurrencyCode } from "@/lib/money";
 
-export type CategoryId = "rum" | "beer" | "whisky" | "vodka" | "wine" | "mixers";
-
-export interface Category {
-  id: CategoryId;
-  label: string;
-}
-
-export interface Product {
+/** A sellable product as the POS needs it; built from the catalog API. */
+export interface PosProduct {
   id: string;
   sku: string;
-  barcode: string;
+  barcode: string | null;
   name: string;
-  brand: string;
-  categoryId: CategoryId;
-  presentation: string;
+  /** Size or pack shown under the name, e.g. "750 ml". */
+  detail: string;
+  imageUrl: string | null;
   /** Unit price before tax, in NIO cents. */
   price: Cents;
   taxPercent: number;
+  /** Stock in base units. */
   stock: number;
   minStock: number;
+  allowNegativeStock: boolean;
+  presentations: PosPresentation[];
+}
+
+export interface PosPresentation {
+  id: string;
+  name: string;
+  /** Base units contained, e.g. 6 for a six-pack. */
+  factor: number;
+  price: Cents;
 }
 
 export interface CartLine {
+  /** productId plus presentationId, so a unit and a six-pack of the same beer are separate lines. */
+  key: string;
   productId: string;
+  presentationId: string | null;
   name: string;
-  presentation: string;
+  detail: string;
   unitPrice: Cents;
   taxPercent: number;
   quantity: number;
+  unitsPerItem: number;
 }
 
 export interface CartTotals {

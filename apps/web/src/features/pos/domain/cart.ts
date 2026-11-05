@@ -1,6 +1,6 @@
 import { percentOf, sumCents, type Cents } from "@/lib/money";
 import { allocate, discountAmount, type Discount } from "./discount";
-import type { CartLine, CartTotals, Product, StockLevel } from "./types";
+import type { CartLine, CartTotals, PosPresentation, PosProduct, StockLevel } from "./types";
 
 export const lineSubtotal = (line: CartLine): Cents => line.unitPrice * line.quantity;
 
@@ -20,45 +20,48 @@ export function computeTotals(lines: readonly CartLine[], discount: Discount | n
   };
 }
 
-export function lineFromProduct(product: Product, quantity = 1): CartLine {
+export const lineKey = (productId: string, presentationId: string | null) => `${productId}:${presentationId ?? "unit"}`;
+
+export function lineFromProduct(product: PosProduct, presentation: PosPresentation | null = null): CartLine {
   return {
+    key: lineKey(product.id, presentation?.id ?? null),
     productId: product.id,
+    presentationId: presentation?.id ?? null,
     name: product.name,
-    presentation: product.presentation,
-    unitPrice: product.price,
+    detail: presentation ? `${presentation.name} · ${presentation.factor} u` : product.detail,
+    unitPrice: presentation?.price ?? product.price,
     taxPercent: product.taxPercent,
-    quantity,
+    quantity: 1,
+    unitsPerItem: presentation?.factor ?? 1,
   };
 }
 
-/** Adds a product to the cart, merging with an existing line and capping at stock. */
-export function addProduct(lines: readonly CartLine[], product: Product): CartLine[] {
-  const existing = lines.find((line) => line.productId === product.id);
-  if (!existing) return [...lines, lineFromProduct(product)];
-  return lines.map((line) =>
-    line.productId === product.id
-      ? { ...line, quantity: Math.min(line.quantity + 1, product.stock) }
-      : line,
-  );
+/** Base units of a product already in the cart, across its unit and pack lines. */
+export const unitsInCart = (productId: string, lines: readonly CartLine[]) =>
+  lines.filter((line) => line.productId === productId).reduce((units, line) => units + line.quantity * line.unitsPerItem, 0);
+
+/** Base units still available for a product after what is already in the cart. */
+export const availableStock = (product: PosProduct, lines: readonly CartLine[]) => product.stock - unitsInCart(product.id, lines);
+
+/** Whether `units` more base units fit in stock; products allowed to sell negative always fit. */
+export const fitsInStock = (product: PosProduct, lines: readonly CartLine[], units: number) =>
+  product.allowNegativeStock || availableStock(product, lines) >= units;
+
+/** Adds one unit or pack, merging with its existing line. Returns null when stock doesn't allow it. */
+export function addProduct(lines: readonly CartLine[], product: PosProduct, presentation: PosPresentation | null = null): CartLine[] | null {
+  if (!fitsInStock(product, lines, presentation?.factor ?? 1)) return null;
+  const key = lineKey(product.id, presentation?.id ?? null);
+  if (!lines.some((line) => line.key === key)) return [...lines, lineFromProduct(product, presentation)];
+  return lines.map((line) => (line.key === key ? { ...line, quantity: line.quantity + 1 } : line));
 }
 
-export function setQuantity(
-  lines: readonly CartLine[],
-  productId: string,
-  quantity: number,
-): CartLine[] {
-  if (quantity <= 0) return lines.filter((line) => line.productId !== productId);
-  return lines.map((line) => (line.productId === productId ? { ...line, quantity } : line));
+export function setQuantity(lines: readonly CartLine[], key: string, quantity: number): CartLine[] {
+  if (quantity <= 0) return lines.filter((line) => line.key !== key);
+  return lines.map((line) => (line.key === key ? { ...line, quantity } : line));
 }
 
-export function stockLevel(product: Pick<Product, "stock" | "minStock">): StockLevel {
+export function stockLevel(product: Pick<PosProduct, "stock" | "minStock">): StockLevel {
   if (product.stock <= 0) return "out";
   if (product.stock <= product.minStock) return "low";
   return "ok";
-}
-
-/** Units still available for a product after what is already in the cart. */
-export function availableStock(product: Product, lines: readonly CartLine[]): number {
-  const inCart = lines.find((line) => line.productId === product.id)?.quantity ?? 0;
-  return product.stock - inCart;
 }

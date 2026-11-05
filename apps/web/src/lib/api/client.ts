@@ -52,6 +52,8 @@ type Method = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
 interface RequestOptions {
   body?: unknown;
+  /** Multipart payload (file uploads); the browser sets its Content-Type boundary. */
+  form?: FormData;
   /** Skips the automatic refresh-and-retry, used by the auth endpoints themselves. */
   skipRefresh?: boolean;
   signal?: AbortSignal;
@@ -76,7 +78,7 @@ async function send(method: Method, path: string, init: RequestOptions, token: s
     return await fetch(`/api/v1${path}`, {
       method,
       headers,
-      body: init.body === undefined ? undefined : JSON.stringify(init.body),
+      body: init.form ?? (init.body === undefined ? undefined : JSON.stringify(init.body)),
       credentials: "same-origin",
       signal: init.signal,
     });

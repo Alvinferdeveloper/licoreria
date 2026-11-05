@@ -12,6 +12,8 @@ export const posCopy = {
     resultsCount: (count: number) => (count === 1 ? "1 producto" : `${count} productos`),
     emptyTitle: "Sin coincidencias",
     emptyBody: "Prueba con la marca, el tamaño o escanea el código de barras.",
+    errorTitle: "No se pudo cargar el catálogo",
+    errorBody: "Revisa la conexión; el carrito se mantiene.",
     notFound: (code: string) => `No hay ningún producto con el código ${code}.`,
     outOfStock: "Agotado",
     lowStock: "Bajo mínimo",

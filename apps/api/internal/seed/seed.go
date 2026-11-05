@@ -223,7 +223,7 @@ func sku(brand, name string, seq int) string {
 	code := func(s string, n int) string {
 		var out []rune
 		for _, r := range strings.ToUpper(stripAccents(s)) {
-			if unicode.IsLetter(r) {
+			if unicode.IsLetter(r) || unicode.IsDigit(r) {
 				out = append(out, r)
 			}
 			if len(out) == n {

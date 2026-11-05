@@ -7,12 +7,15 @@ const percent = (value: number): Discount => ({ kind: "percent", value, authoriz
 const amount = (value: number): Discount => ({ kind: "amount", value, authorizedBy: null });
 
 const line = (unitPrice: number, quantity = 1, taxPercent = 15): CartLine => ({
+  key: `p${unitPrice}:${taxPercent}`,
   productId: `p${unitPrice}`,
+  presentationId: null,
   name: "x",
-  presentation: "750 ml",
+  detail: "750 ml",
   unitPrice,
   taxPercent,
   quantity,
+  unitsPerItem: 1,
 });
 
 describe("discount", () => {
