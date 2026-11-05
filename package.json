@@ -10,6 +10,8 @@
     "build:web": "pnpm --filter web build",
     "lint": "pnpm --filter web lint",
     "test": "pnpm --filter web test",
-    "typecheck": "pnpm --filter web typecheck"
+    "typecheck": "pnpm --filter web typecheck",
+    "dev:api": "cd apps/api && go run ./cmd/api",
+    "test:api": "cd apps/api && go test ./..."
   }
 }

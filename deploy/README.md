@@ -1,3 +1,3 @@
 # Despliegue
 
-Docker Compose, proxy con HTTPS y scripts de respaldo.
+compose.yaml (Podman o Docker), proxy con HTTPS y scripts de respaldo.

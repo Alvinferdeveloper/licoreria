@@ -13,7 +13,7 @@ Punto de venta, inventario (kardex), compras, caja por turnos y facturación par
 | Base de datos | PostgreSQL 16 |
 | Archivos | Supabase Storage |
 | Correo | Resend / SMTP |
-| Despliegue | Docker Compose |
+| Contenedores | Compose (Podman o Docker) |
 
 ## Estructura
 
@@ -21,8 +21,9 @@ Punto de venta, inventario (kardex), compras, caja por turnos y facturación par
 licoreria/
 ├── apps/
 │   ├── web/        # Frontend Next.js
-│   └── api/        # API REST en Go
-├── deploy/         # docker-compose, proxy, scripts de respaldo
+│   └── api/        # API REST en Go (ver apps/api/README.md)
+├── compose.yaml    # base de datos y API (Podman o Docker)
+├── deploy/         # proxy y scripts de respaldo
 ├── docs/           # requisitos, diagrama ER, manual de usuario
 └── .github/        # CI
 ```
@@ -30,17 +31,36 @@ licoreria/
 ## Requisitos de desarrollo
 
 - Node.js 22+ y pnpm 10+
-- Go 1.23+
-- Docker y Docker Compose
+- Go 1.27+
+- Podman 5+ (`podman compose`) o Docker (`docker compose`)
 
 ## Puesta en marcha
 
+Copia `.env.example` a `.env` y define `DB_PASSWORD`.
+
+**Todo en contenedores** (base de datos y API en http://localhost:8080):
+
 ```bash
-pnpm install
-pnpm dev:web        # http://localhost:3000/pos
-pnpm test           # pruebas del dominio (dinero, carrito, cobro)
+podman compose up -d --build   # o: docker compose up -d --build
+curl http://localhost:8080/api/v1/health
+```
+
+**Desarrollo** (base de datos en contenedor, API y web en local):
+
+```bash
+podman compose up -d db        # o: docker compose up -d db
+export DATABASE_URL="postgres://licoreria:<DB_PASSWORD>@localhost:5432/licoreria?sslmode=disable"
+pnpm dev:api                   # API en :8080; aplica las migraciones al arrancar
+pnpm install && pnpm dev:web   # web en http://localhost:3000
+```
+
+## Calidad
+
+```bash
+pnpm test:api      # pruebas de la API
+pnpm test          # pruebas del frontend
 pnpm typecheck
 pnpm lint
 ```
 
-La API en Go y Docker Compose se agregan en la fase 0.
+El CI (GitHub Actions) ejecuta formato, `go vet`, pruebas, el ciclo completo de migraciones contra PostgreSQL y el build del frontend.

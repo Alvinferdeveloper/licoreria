@@ -1,0 +1,84 @@
+// Package server assembles the router and runs the HTTP server with graceful shutdown.
+package server
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+	"net/http"
+	"time"
+
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"licoreria/api/internal/health"
+	"licoreria/api/internal/httpx"
+	"licoreria/api/internal/platform/config"
+)
+
+type Deps struct {
+	Config config.Config
+	Logger *slog.Logger
+	DB     *pgxpool.Pool
+}
+
+func NewRouter(deps Deps) http.Handler {
+	r := chi.NewRouter()
+	r.Use(
+		middleware.RealIP,
+		httpx.RequestID(deps.Logger),
+		httpx.AccessLog,
+		httpx.Recoverer,
+		httpx.SecurityHeaders,
+		cors.Handler(cors.Options{
+			AllowedOrigins:   deps.Config.AllowedOrigins,
+			AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+			AllowedHeaders:   []string{"Authorization", "Content-Type", "Idempotency-Key", httpx.RequestIDHeader},
+			ExposedHeaders:   []string{httpx.RequestIDHeader},
+			AllowCredentials: true,
+			MaxAge:           600,
+		}),
+	)
+	r.NotFound(httpx.NotFound)
+	r.MethodNotAllowed(httpx.MethodNotAllowed)
+
+	r.Route("/api/v1", func(api chi.Router) {
+		health.NewHandler(deps.DB).Routes(api)
+	})
+	return r
+}
+
+// Run serves until ctx is cancelled, then drains in-flight requests.
+func Run(ctx context.Context, cfg config.Config, logger *slog.Logger, handler http.Handler) error {
+	srv := &http.Server{
+		Addr:              cfg.HTTPAddr,
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelWarn),
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		logger.Info("api listening", "addr", cfg.HTTPAddr, "env", cfg.Env)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errCh <- err
+		}
+		close(errCh)
+	}()
+
+	select {
+	case err := <-errCh:
+		return err
+	case <-ctx.Done():
+	}
+
+	logger.Info("shutting down", "timeout", cfg.ShutdownTimeout)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+	defer cancel()
+	return srv.Shutdown(shutdownCtx)
+}
