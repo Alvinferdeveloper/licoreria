@@ -12,7 +12,7 @@ func resetCatalog(env *testEnv) {
 		ALTER TABLE inventory_movements DISABLE TRIGGER inventory_movements_immutable;
 		DELETE FROM inventory_movements;
 		ALTER TABLE inventory_movements ENABLE TRIGGER inventory_movements_immutable;
-		DELETE FROM product_presentations; DELETE FROM products; DELETE FROM categories; DELETE FROM brands;`); err != nil {
+		DELETE FROM purchases; DELETE FROM product_presentations; DELETE FROM products; DELETE FROM categories; DELETE FROM brands;`); err != nil {
 		env.t.Fatal(err)
 	}
 }

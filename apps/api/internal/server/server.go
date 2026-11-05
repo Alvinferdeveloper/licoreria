@@ -17,10 +17,12 @@ import (
 	"licoreria/api/internal/catalog"
 	"licoreria/api/internal/health"
 	"licoreria/api/internal/httpx"
+	"licoreria/api/internal/inventory"
 	"licoreria/api/internal/parties"
 	"licoreria/api/internal/platform/config"
 	"licoreria/api/internal/platform/storage"
 	"licoreria/api/internal/products"
+	"licoreria/api/internal/purchases"
 	"licoreria/api/internal/roles"
 	"licoreria/api/internal/users"
 )
@@ -58,6 +60,7 @@ func NewRouter(deps Deps) http.Handler {
 		ServiceKey: deps.Config.Storage.SupabaseServiceKey,
 		Bucket:     deps.Config.Storage.Bucket,
 	})
+	ledger := inventory.NewLedger(deps.Config.AppBaseURL)
 	if !store.Enabled() {
 		deps.Logger.Warn("supabase storage not configured, product image uploads are disabled")
 	}
@@ -74,6 +77,8 @@ func NewRouter(deps Deps) http.Handler {
 			products.NewHandler(products.NewService(deps.DB, store)).Routes(protected)
 			parties.NewCustomerHandler(parties.NewCustomerService(deps.DB)).Routes(protected)
 			parties.NewSupplierHandler(parties.NewSupplierService(deps.DB)).Routes(protected)
+			inventory.NewHandler(inventory.NewService(deps.DB, ledger)).Routes(protected)
+			purchases.NewHandler(purchases.NewService(deps.DB, ledger)).Routes(protected)
 		})
 	})
 	return r

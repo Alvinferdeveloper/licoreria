@@ -26,3 +26,12 @@ export function formatRelative(iso: string, now = Date.now()): string {
 }
 
 export const formatDateTime = (iso: string) => absolute.format(new Date(iso));
+
+/** "2026-11-05" → "05/11/2026" without shifting the calendar day across zones. */
+export function formatDate(day: string): string {
+  const [y, m, d] = day.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+/** Today's calendar day in the store's zone, as YYYY-MM-DD. */
+export const todayISO = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Managua" }).format(new Date());

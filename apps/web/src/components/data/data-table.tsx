@@ -21,11 +21,13 @@ interface DataTableProps<T> {
   onRetry: () => void;
   empty: { title: string; body: string };
   rowClassName?: (row: T) => string | undefined;
+  /** Mouse shortcut only; keep a link or button in the row for keyboard users. */
+  onRowClick?: (row: T) => void;
   minWidth?: number;
 }
 
 /** Table with the standard loading skeleton, error and empty states. */
-export function DataTable<T>({ columns, rows, rowKey, loading, error, onRetry, empty, rowClassName, minWidth = 760 }: DataTableProps<T>) {
+export function DataTable<T>({ columns, rows, rowKey, loading, error, onRetry, empty, rowClassName, onRowClick, minWidth = 760 }: DataTableProps<T>) {
   return (
     <div className="overflow-x-auto rounded-lg border border-line bg-surface">
       <table className="w-full border-collapse text-left" style={{ minWidth }}>
@@ -52,7 +54,11 @@ export function DataTable<T>({ columns, rows, rowKey, loading, error, onRetry, e
               </tr>
             ))}
           {rows?.map((row) => (
-            <tr key={rowKey(row)} className={cn("group h-14 transition-colors hover:bg-chrome/60", rowClassName?.(row))}>
+            <tr
+              key={rowKey(row)}
+              onClick={onRowClick && (() => onRowClick(row))}
+              className={cn("group h-14 transition-colors hover:bg-chrome/60", onRowClick && "cursor-pointer", rowClassName?.(row))}
+            >
               {columns.map((col, j) => (
                 <td key={j} className={cn("px-4", col.className)}>
                   {col.cell(row)}

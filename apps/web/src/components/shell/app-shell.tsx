@@ -1,6 +1,6 @@
 "use client";
 
-import { AddressBook, CashRegister, ShieldCheck, SignOut, Tag, Truck, UsersThree, Wine, type Icon } from "@phosphor-icons/react";
+import { AddressBook, CashRegister, Package, ShieldCheck, SignOut, Stack, Tag, Truck, UsersThree, Wine, type Icon } from "@phosphor-icons/react";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -25,6 +25,8 @@ const NAV: readonly { label: string; items: readonly NavItem[] }[] = [
     items: [
       { href: "/productos", label: "Productos", icon: Wine, permission: "products:view" },
       { href: "/categorias", label: "Categorías y marcas", icon: Tag, permission: "categories:view" },
+      { href: "/inventario", label: "Existencias y kardex", icon: Stack, permission: "inventory:view" },
+      { href: "/compras", label: "Compras", icon: Package, permission: "purchases:view" },
     ],
   },
   {

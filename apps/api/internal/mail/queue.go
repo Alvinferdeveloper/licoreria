@@ -15,6 +15,7 @@ import (
 const (
 	TemplateWelcome       = "welcome"
 	TemplatePasswordReset = "password_reset"
+	TemplateLowStock      = "low_stock"
 )
 
 // Enqueue renders the template with data and stores the message for delivery.
