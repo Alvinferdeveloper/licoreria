@@ -1,0 +1,23 @@
+export const reportsCopy = {
+  title: "Reportes",
+  description: "Cada reporte se filtra, se revisa en pantalla y se exporta a Excel o PDF con los mismos datos.",
+  invoice: {
+    title: "Factura de venta y ticket",
+    description: "La factura detallada en PDF y el ticket se generan desde cada venta.",
+    action: "Ir a Ventas",
+  },
+  open: "Abrir",
+  back: "Reportes",
+  all: "Todos",
+  any: "Todas",
+  pickProduct: "Buscar producto",
+  clearProduct: "Quitar",
+  excel: "Excel",
+  pdf: "PDF",
+  required: (label: string) => `Elige ${label.toLowerCase()} para ver el reporte.`,
+  rows: (n: number) => (n === 1 ? "1 fila" : `${n} filas`),
+  truncated: (n: number) => `Se muestran las primeras ${n} filas. Acota los filtros o exporta para ver más.`,
+  total: "Total",
+  empty: { title: "Sin resultados", body: "Ningún registro coincide con los filtros." },
+  exportError: "No se pudo generar el archivo. Intenta de nuevo.",
+} as const;

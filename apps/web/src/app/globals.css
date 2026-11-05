@@ -31,6 +31,14 @@
   --info: oklch(52% 0.085 240);
   --info-tint: oklch(95% 0.02 240);
 
+  /* Chart categorical order (validated with the dataviz checks): amber, slate, ochre, bottle green, plum, sand. */
+  --chart-1: #ad5907;
+  --chart-2: #2e598f;
+  --chart-3: #c8a83a;
+  --chart-4: #008a63;
+  --chart-5: #8e336c;
+  --chart-6: #cc8f5c;
+
   --shadow-tint: 23% 0.016 58;
   --edge-light: oklch(100% 0 0 / 0.6);
 }
@@ -63,6 +71,13 @@
   --danger-tint: oklch(28% 0.05 25);
   --info: oklch(74% 0.08 240);
   --info-tint: oklch(27% 0.03 240);
+
+  --chart-1: #cf7b26;
+  --chart-2: #4c82c6;
+  --chart-3: #ae931d;
+  --chart-4: #009f7a;
+  --chart-5: #b2468a;
+  --chart-6: #cc7863;
 
   --shadow-tint: 8% 0.01 60;
   --edge-light: oklch(100% 0 0 / 0.08);

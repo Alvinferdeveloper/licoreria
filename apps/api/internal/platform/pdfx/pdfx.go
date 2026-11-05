@@ -11,6 +11,7 @@ import (
 	"github.com/johnfercher/maroto/v2/pkg/config"
 	"github.com/johnfercher/maroto/v2/pkg/consts/align"
 	"github.com/johnfercher/maroto/v2/pkg/consts/fontstyle"
+	"github.com/johnfercher/maroto/v2/pkg/consts/orientation"
 	"github.com/johnfercher/maroto/v2/pkg/consts/pagesize"
 	"github.com/johnfercher/maroto/v2/pkg/core"
 	"github.com/johnfercher/maroto/v2/pkg/fontrepository"
@@ -43,8 +44,11 @@ var (
 	Danger = &props.Color{Red: 178, Green: 34, Blue: 34}
 )
 
-// New returns a letter-size document with the embedded fonts and the given title.
-func New(title string) (core.Maroto, error) {
+// New returns a portrait letter-size document with a 12-column grid.
+func New(title string) (core.Maroto, error) { return NewDocument(title, false, 12) }
+
+// NewDocument returns a letter-size document; gridSize sets how many grid columns a row has.
+func NewDocument(title string, landscape bool, gridSize int) (core.Maroto, error) {
 	fonts, err := fontrepository.New().
 		AddUTF8FontFromBytes(Sans, fontstyle.Normal, goregular.TTF).
 		AddUTF8FontFromBytes(Sans, fontstyle.Bold, gobold.TTF).
@@ -54,8 +58,14 @@ func New(title string) (core.Maroto, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load pdf fonts: %w", err)
 	}
-	cfg := config.NewBuilder().
+	builder := config.NewBuilder()
+	if landscape {
+		builder = builder.WithOrientation(orientation.Horizontal)
+	}
+	cfg := builder.
 		WithPageSize(pagesize.Letter).
+		WithMaxGridSize(gridSize).
+		WithPageNumber(props.PageNumber{Pattern: "Página {current} de {total}", Place: props.RightBottom, Family: Sans, Size: 7, Color: Muted}).
 		WithLeftMargin(15).WithRightMargin(15).WithTopMargin(15).WithBottomMargin(12).
 		WithCustomFonts(fonts).
 		WithDefaultFont(&props.Font{Family: Sans, Size: 9, Color: Ink}).

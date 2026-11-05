@@ -1,6 +1,6 @@
 "use client";
 
-import { AddressBook, CashRegister, ClockCounterClockwise, CurrencyCircleDollar, Package, Receipt, Vault, ShieldCheck, SignOut, Stack, Tag, Truck, UsersThree, Wine, type Icon } from "@phosphor-icons/react";
+import { AddressBook, CashRegister, ChartLine, FileText, ClockCounterClockwise, CurrencyCircleDollar, Package, Receipt, Vault, ShieldCheck, SignOut, Stack, Tag, Truck, UsersThree, Wine, type Icon } from "@phosphor-icons/react";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -19,6 +19,13 @@ interface NavItem {
 }
 
 const NAV: readonly { label: string; items: readonly NavItem[] }[] = [
+  {
+    label: "Negocio",
+    items: [
+      { href: "/panel", label: "Panel", icon: ChartLine, permission: "dashboard:view" },
+      { href: "/reportes", label: "Reportes", icon: FileText, permission: "reports:view" },
+    ],
+  },
   {
     label: "Vender",
     items: [

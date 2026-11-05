@@ -86,4 +86,19 @@ func TestSaleFlow(t *testing.T) {
 	if stock() != 10 {
 		t.Errorf("voiding must return the stock, got %d", stock())
 	}
+
+	// Every report runs against real data; exports and the dashboard render.
+	catalog := admin.do(http.MethodGet, "/reports", nil)
+	expectStatus(t, catalog, http.StatusOK, "report catalog")
+	for _, r := range catalog.body["reports"].([]any) {
+		key := r.(map[string]any)["key"].(string)
+		expectStatus(t, admin.do(http.MethodGet, "/reports/"+key+"?productId="+productID, nil), http.StatusOK, "report "+key)
+	}
+	voided := admin.do(http.MethodGet, "/reports/voided", nil)
+	if rows := voided.body["rows"].([]any); len(rows) != 1 {
+		t.Errorf("voided report should list the voided sale, got %d rows", len(rows))
+	}
+	expectStatus(t, admin.do(http.MethodGet, "/reports/kardex?productId="+productID+"&format=xlsx", nil), http.StatusOK, "kardex xlsx")
+	expectStatus(t, admin.do(http.MethodGet, "/reports/sales-detail?format=pdf", nil), http.StatusOK, "sales pdf")
+	expectStatus(t, cashier.do(http.MethodGet, "/dashboard", nil), http.StatusOK, "dashboard")
 }
