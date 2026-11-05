@@ -23,10 +23,13 @@ type Result struct {
 	Products  int
 	Customers int
 	Suppliers int
+	Sales     int
+	Shifts    int
+	Purchases int
 	Skipped   bool
 }
 
-// Demo loads the catalog once; it does nothing if products already exist.
+// Demo loads the catalog and 90 days of operation once; it does nothing if products already exist.
 func Demo(ctx context.Context, pool *pgxpool.Pool) (Result, error) {
 	var existing int
 	if err := pool.QueryRow(ctx, `SELECT count(*) FROM products`).Scan(&existing); err != nil {
@@ -74,7 +77,7 @@ func Demo(ctx context.Context, pool *pgxpool.Pool) (Result, error) {
 			}
 			result.Suppliers++
 		}
-		return nil
+		return loadHistory(ctx, tx, adminID, &result)
 	})
 	return result, err
 }
@@ -172,8 +175,9 @@ func (s *seeder) addLine(ctx context.Context, l line) (int, error) {
 		}
 
 		if _, err := s.tx.Exec(ctx, `
-			INSERT INTO inventory_movements (product_id, type, quantity, unit_cost, reason, created_by)
-			VALUES ($1, 'count_adjustment', $2, $3, 'Inventario inicial', $4)`, productID, stock, cost, s.admin); err != nil {
+			INSERT INTO inventory_movements (product_id, type, quantity, unit_cost, reason, created_by, created_at)
+			VALUES ($1, 'count_adjustment', $2, $3, 'Inventario inicial', $4, $5)`,
+			productID, stock, cost, s.admin, storeToday().AddDate(0, 0, -historyDays-1)); err != nil {
 			return 0, err
 		}
 	}

@@ -108,7 +108,7 @@ func verifyBackup(cfg config.Config, logger *slog.Logger) error {
 	return nil
 }
 
-// seedDemo loads the demo catalog, customers and suppliers once.
+// seedDemo loads the demo catalog, customers, suppliers and sales history once.
 func seedDemo(cfg config.Config) error {
 	ctx := context.Background()
 	if err := database.MigrateUp(cfg.DatabaseURL); err != nil {
@@ -128,7 +128,8 @@ func seedDemo(cfg config.Config) error {
 		fmt.Println("Ya hay productos cargados; no se cargó la demo.")
 		return nil
 	}
-	fmt.Printf("Demo cargada: %d productos, %d clientes, %d proveedores.\n", result.Products, result.Customers, result.Suppliers)
+	fmt.Printf("Demo cargada: %d productos, %d clientes, %d proveedores, %d ventas, %d turnos, %d compras.\n",
+		result.Products, result.Customers, result.Suppliers, result.Sales, result.Shifts, result.Purchases)
 	return nil
 }
 
