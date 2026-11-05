@@ -17,6 +17,7 @@ import (
 	"licoreria/api/internal/inventory"
 	"licoreria/api/internal/mail"
 	"licoreria/api/internal/platform/database"
+	"licoreria/api/internal/platform/logx"
 	"licoreria/api/internal/platform/pdfx"
 	"licoreria/api/internal/rates"
 	"licoreria/api/internal/settings"
@@ -55,6 +56,7 @@ type Service struct {
 	pool   *pgxpool.Pool
 	ledger *inventory.Ledger
 	repo   repository
+	logos  pdfx.ImageCache
 }
 
 func NewService(pool *pgxpool.Pool, ledger *inventory.Ledger) *Service {
@@ -91,8 +93,25 @@ func (s *Service) Invoice(ctx context.Context, p auth.Principal, id uuid.UUID) (
 	if err != nil {
 		return Sale{}, nil, err
 	}
-	pdf, err := InvoicePDF(sale, business)
+	invoice, err := settings.GetInvoice(ctx, s.pool)
+	if err != nil {
+		return Sale{}, nil, err
+	}
+	pdf, err := InvoicePDF(sale, business, invoice.FooterNote, s.logo(ctx, business))
 	return sale, pdf, err
+}
+
+// logo never blocks an invoice: if it can't be loaded, the PDF goes out without it.
+func (s *Service) logo(ctx context.Context, b settings.Business) *pdfx.Image {
+	if b.LogoURL == nil {
+		return nil
+	}
+	logo, err := s.logos.Get(ctx, *b.LogoURL)
+	if err != nil {
+		logx.From(ctx).Warn("load invoice logo", "error", err)
+		return nil
+	}
+	return logo
 }
 
 // Email queues the invoice to the given address; delivery happens in the background.

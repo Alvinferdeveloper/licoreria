@@ -104,6 +104,7 @@ func (e *testEnv) newClient() *client {
 type response struct {
 	status int
 	body   map[string]any
+	raw    []byte
 }
 
 func (r response) errorCode() string {
@@ -169,9 +170,9 @@ func (c *client) send(method, path string, body io.Reader, contentType string, h
 	defer res.Body.Close()
 
 	out := response{status: res.StatusCode, body: map[string]any{}}
-	raw, _ := io.ReadAll(res.Body)
-	if len(raw) > 0 {
-		_ = json.Unmarshal(raw, &out.body)
+	out.raw, _ = io.ReadAll(res.Body)
+	if len(out.raw) > 0 {
+		_ = json.Unmarshal(out.raw, &out.body)
 	}
 	return out
 }

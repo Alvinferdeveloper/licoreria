@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/google/uuid"
@@ -19,6 +20,7 @@ import (
 	"licoreria/api/internal/platform/database"
 	"licoreria/api/internal/platform/logx"
 	"licoreria/api/internal/platform/storage"
+	"licoreria/api/internal/settings"
 )
 
 const MaxImageBytes = 5 << 20
@@ -100,6 +102,15 @@ func (s *Service) Lookup(ctx context.Context, p auth.Principal, code string) (Lo
 	return LookupResult{Product: present(p, product), PresentationID: presentationID}, err
 }
 
+// defaultTax is the VAT for products created without one.
+func defaultTax(ctx context.Context, db database.DBTX) (string, error) {
+	tax, err := settings.GetTax(ctx, db)
+	if err != nil {
+		return "", err
+	}
+	return strconv.FormatFloat(tax.DefaultPercent, 'f', -1, 64), nil
+}
+
 func normalize(in Input) Input {
 	in.SKU = strings.ToUpper(strings.TrimSpace(in.SKU))
 	in.Name = strings.Join(strings.Fields(in.Name), " ")
@@ -122,6 +133,12 @@ func normalize(in Input) Input {
 func (s *Service) Create(ctx context.Context, actor auth.Principal, in Input) (Product, error) {
 	if !canSeeCosts(actor) {
 		return Product{}, ErrPriceChangeForbidden
+	}
+	if in.TaxPercent == "" {
+		var err error
+		if in.TaxPercent, err = defaultTax(ctx, s.pool); err != nil {
+			return Product{}, err
+		}
 	}
 	in = normalize(in)
 	var created Product

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"licoreria/api/internal/platform/database"
@@ -77,6 +78,46 @@ func GetBackups(ctx context.Context, db database.DBTX) (Backups, error) {
 func GetPOS(ctx context.Context, db database.DBTX) (POS, error) {
 	value := DefaultPOS
 	return value, get(ctx, db, "pos", &value)
+}
+
+// Tax holds the VAT applied to new products; existing products and past sales keep their own.
+type Tax struct {
+	DefaultPercent float64 `json:"defaultPercent"`
+}
+
+var DefaultTax = Tax{DefaultPercent: 15}
+
+func GetTax(ctx context.Context, db database.DBTX) (Tax, error) {
+	value := DefaultTax
+	return value, get(ctx, db, "tax", &value)
+}
+
+// Invoice holds the text the business chooses for its printed documents.
+type Invoice struct {
+	FooterNote string `json:"footerNote"`
+}
+
+var DefaultInvoice = Invoice{FooterNote: "Cambios y devoluciones dentro de 7 días con esta factura, producto sellado y en buen estado."}
+
+func GetInvoice(ctx context.Context, db database.DBTX) (Invoice, error) {
+	value := DefaultInvoice
+	return value, get(ctx, db, "invoice", &value)
+}
+
+// Set merges value into the stored JSON, so keys this version doesn't know are kept.
+func Set(ctx context.Context, db database.DBTX, key string, value any, by uuid.UUID) error {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("encode setting %q: %w", key, err)
+	}
+	_, err = db.Exec(ctx, `
+		INSERT INTO settings (key, value, updated_by) VALUES ($1, $2::jsonb, $3)
+		ON CONFLICT (key) DO UPDATE SET value = settings.value || EXCLUDED.value, updated_by = EXCLUDED.updated_by`,
+		key, string(raw), by)
+	if err != nil {
+		return fmt.Errorf("save setting %q: %w", key, err)
+	}
+	return nil
 }
 
 // get decodes the stored JSON over dst; fields absent from the JSON keep their defaults.

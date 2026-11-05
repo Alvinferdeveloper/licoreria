@@ -159,6 +159,10 @@ func (s *Service) analyzeImport(ctx context.Context, db database.DBTX, rows []sh
 		return ImportReport{}, err
 	}
 
+	tax, err := defaultTax(ctx, db)
+	if err != nil {
+		return ImportReport{}, err
+	}
 	report := ImportReport{Total: len(rows), NewBrands: []string{}, Rows: make([]ImportRow, len(rows))}
 	seenSKU, seenCode, newBrands := map[string]int{}, map[string]int{}, map[string]bool{}
 	for i, rec := range records {
@@ -178,6 +182,9 @@ func (s *Service) analyzeImport(ctx context.Context, db database.DBTX, rows []sh
 		in := Input{SKU: rec.SKU, Name: rec.Name, Description: rec.Description, Price: rec.Price,
 			AverageCost: rec.Cost, TaxPercent: rec.Tax,
 			MinStock: atoiOrZero(rec.MinStock), ReorderPoint: atoiOrZero(rec.ReorderPoint)}
+		if in.TaxPercent == "" {
+			in.TaxPercent = tax
+		}
 		if rec.Barcode != "" {
 			in.Barcode = &rec.Barcode
 		}

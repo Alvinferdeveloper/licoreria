@@ -76,6 +76,8 @@ export interface SaleFilters {
 export interface StoreSettings {
   business: { name: string; taxId: string; address: string; phone: string; email: string; logoUrl: string | null };
   pos: { discountLimitPercent: number; allowNegativeStock: boolean; defaultPrintFormat: string };
+  tax: { defaultPercent: number };
+  invoice: { footerNote: string };
 }
 
 export const salesKeys = {

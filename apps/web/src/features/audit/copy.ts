@@ -74,6 +74,8 @@ export const auditCopy = {
     "roles.permissions_updated": "Cambió permisos de un rol",
     "sales.created": "Registró una venta",
     "sales.voided": "Anuló una venta",
+    "settings.updated": "Cambió la configuración",
+    "settings.logo_changed": "Cambió el logo del negocio",
     "sales.emailed": "Envió una factura por correo",
     "cash_shifts.opened": "Abrió caja",
     "cash_shifts.movement": "Registró un movimiento de caja",

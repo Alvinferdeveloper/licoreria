@@ -117,6 +117,7 @@ function Ticket({ sale, store, width }: { sale: Sale; store: StoreSettings; widt
       {qr && <div className="mx-auto my-2 w-20" aria-label={sale.invoice} dangerouslySetInnerHTML={{ __html: qr }} />}
       <footer className="text-center">
         <p className="font-bold">{copy.thanks}</p>
+        {store.invoice.footerNote && <p>{store.invoice.footerNote}</p>}
         <p>{copy.age}</p>
         <p>{copy.fiscal}</p>
       </footer>

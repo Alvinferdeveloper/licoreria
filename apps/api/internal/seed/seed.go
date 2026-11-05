@@ -15,7 +15,11 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"licoreria/api/internal/platform/database"
 	"licoreria/api/internal/platform/textx"
+	"licoreria/api/internal/settings"
 )
+
+var demoBusiness = settings.Business{Name: "Bodega Añejo", TaxID: "J0310000123456",
+	Address: "Del Colegio La Salle 2 cuadras al sur, Managua", Phone: "2250 1234", Email: "ventas@example.com"}
 
 var ErrNoAdmin = errors.New("create an administrator first (api create-admin)")
 
@@ -76,6 +80,9 @@ func Demo(ctx context.Context, pool *pgxpool.Pool) (Result, error) {
 				return err
 			}
 			result.Suppliers++
+		}
+		if err := settings.Set(ctx, tx, "business", demoBusiness, adminID); err != nil {
+			return err
 		}
 		return loadHistory(ctx, tx, adminID, &result)
 	})

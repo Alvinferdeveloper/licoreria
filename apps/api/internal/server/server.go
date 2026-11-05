@@ -18,6 +18,7 @@ import (
 	"licoreria/api/internal/backups"
 	"licoreria/api/internal/cash"
 	"licoreria/api/internal/catalog"
+	"licoreria/api/internal/configuration"
 	"licoreria/api/internal/dashboard"
 	"licoreria/api/internal/health"
 	"licoreria/api/internal/httpx"
@@ -95,6 +96,7 @@ func NewRouter(deps Deps) http.Handler {
 				cash.NewHandler(cash.NewService(deps.DB, deps.Config.AppBaseURL)).Routes(protected)
 				sales.NewHandler(sales.NewService(deps.DB, ledger)).Routes(protected)
 				settings.NewHandler(deps.DB).Routes(protected)
+				configuration.NewHandler(configuration.NewService(deps.DB, store)).Routes(protected)
 				reports.NewHandler(reports.NewService(deps.DB)).Routes(protected)
 				dashboard.NewHandler(deps.DB).Routes(protected)
 				backups.NewHandler(deps.Backups).Routes(protected)

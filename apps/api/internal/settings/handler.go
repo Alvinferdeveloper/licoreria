@@ -31,5 +31,15 @@ func (h *Handler) store(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, err)
 		return
 	}
-	httpx.JSON(w, r, http.StatusOK, map[string]any{"business": business, "pos": pos})
+	tax, err := GetTax(r.Context(), h.pool)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	invoice, err := GetInvoice(r.Context(), h.pool)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	httpx.JSON(w, r, http.StatusOK, map[string]any{"business": business, "pos": pos, "tax": tax, "invoice": invoice})
 }

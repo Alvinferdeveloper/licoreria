@@ -51,7 +51,7 @@ type Values = z.infer<typeof schema>;
 
 const FIELDS = ["name", "sku", "barcode", "categoryId", "brandId", "unitId", "price", "taxPercent", "averageCost", "minStock", "reorderPoint", "presentations"] as const;
 
-function toValues(p: Product | null): Values {
+function toValues(p: Product | null, defaultTax: number): Values {
   return {
     name: p?.name ?? "",
     sku: p?.sku ?? "",
@@ -61,7 +61,7 @@ function toValues(p: Product | null): Values {
     unitId: p?.unit.id ?? "",
     description: p?.description ?? "",
     price: p?.price ?? "",
-    taxPercent: p ? String(Number(p.taxPercent)) : "15",
+    taxPercent: p ? String(Number(p.taxPercent)) : String(defaultTax),
     averageCost: "",
     minStock: String(p?.minStock ?? 0),
     reorderPoint: String(p?.reorderPoint ?? 0),
@@ -104,13 +104,14 @@ interface ProductFormProps {
   canEditPrices: boolean;
   onCancel: () => void;
   onSubmit: (input: ProductInput) => Promise<void>;
+  defaultTax?: number;
   onUploadImage: (file: File) => Promise<Product>;
   onRemoveImage: () => Promise<Product>;
 }
 
-export function ProductForm({ product, categories, brands, units, canEditPrices, onCancel, onSubmit, onUploadImage, onRemoveImage }: ProductFormProps) {
+export function ProductForm({ product, categories, brands, units, canEditPrices, defaultTax = 15, onCancel, onSubmit, onUploadImage, onRemoveImage }: ProductFormProps) {
   const [formError, setFormError] = useState<string | null>(null);
-  const form = useForm<Values>({ resolver: zodResolver(schema), defaultValues: toValues(product) });
+  const form = useForm<Values>({ resolver: zodResolver(schema), defaultValues: toValues(product, defaultTax) });
   const presentations = useFieldArray({ control: form.control, name: "presentations" });
   const { errors, isSubmitting } = form.formState;
   const priceLocked = !canEditPrices;

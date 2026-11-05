@@ -1,0 +1,58 @@
+import type { PrintFormat } from "./api";
+
+export const settingsCopy = {
+  title: "Configuración",
+  description: "Los datos con los que el negocio aparece en facturas, tickets y correos, y las reglas generales de venta.",
+  loadError: "No se pudo cargar la configuración. Recarga la página para intentar de nuevo.",
+  save: "Guardar cambios",
+  saved: "Configuración guardada.",
+  business: {
+    title: "Datos del negocio",
+    hint: "Salen en el encabezado de la factura y del ticket.",
+    name: "Nombre o razón social",
+    taxId: "RUC",
+    address: "Dirección",
+    phone: "Teléfono",
+    email: "Correo",
+  },
+  logo: {
+    title: "Logo",
+    hint: "Se imprime en la factura detallada. PNG o JPG de hasta 2 MB, mejor con fondo blanco.",
+    upload: "Subir logo",
+    replace: "Reemplazar",
+    remove: "Quitar",
+    saved: "Logo actualizado.",
+    removed: "Logo quitado.",
+    failed: "No se pudo actualizar el logo.",
+  },
+  sales: {
+    title: "Impuestos y descuentos",
+    hint: "Cambiar el IVA no toca productos existentes ni facturas emitidas.",
+    tax: "IVA para productos nuevos (%)",
+    discount: "Descuento sin autorización (%)",
+    discountHint: "Sobre este límite, el cajero necesita el PIN de un administrador.",
+  },
+  invoice: {
+    title: "Factura y ticket",
+    hint: "El cajero puede elegir el otro formato al cerrar cada venta.",
+    format: "Formato por defecto",
+    formats: [
+      { value: "ticket", label: "Ticket" },
+      { value: "invoice", label: "Factura detallada" },
+    ] satisfies { value: PrintFormat; label: string }[],
+    footer: "Nota al pie",
+    footerHint: "Por ejemplo, tu política de cambios. Las leyendas de mayoría de edad y de comprobante interno siempre se imprimen.",
+  },
+  numbering: {
+    title: "Numeración",
+    hint: "Cada caja lleva su propia serie consecutiva, asignada al momento de vender.",
+    next: (series: string, number: number) => `${series}-${String(number).padStart(6, "0")}`,
+    nextLabel: "Próxima factura",
+    manage: "Administrar cajas",
+  },
+  validation: {
+    name: "Escribe el nombre del negocio.",
+    email: "Escribe un correo válido.",
+    percent: "Escribe un porcentaje entre 0 y 100.",
+  },
+};

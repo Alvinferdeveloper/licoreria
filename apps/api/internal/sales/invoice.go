@@ -6,6 +6,7 @@ import (
 
 	"github.com/johnfercher/maroto/v2/pkg/components/code"
 	"github.com/johnfercher/maroto/v2/pkg/components/col"
+	"github.com/johnfercher/maroto/v2/pkg/components/image"
 	"github.com/johnfercher/maroto/v2/pkg/components/line"
 	"github.com/johnfercher/maroto/v2/pkg/components/row"
 	"github.com/johnfercher/maroto/v2/pkg/components/text"
@@ -52,7 +53,7 @@ func usdEquivalent(totalNIO, rate string) string {
 }
 
 // InvoicePDF renders the detailed letter-size invoice.
-func InvoicePDF(s Sale, b settings.Business) ([]byte, error) {
+func InvoicePDF(s Sale, b settings.Business, note string, logo *pdfx.Image) ([]byte, error) {
 	m, err := pdfx.New("Factura " + s.Invoice)
 	if err != nil {
 		return nil, err
@@ -79,7 +80,13 @@ func InvoicePDF(s Sale, b settings.Business) ([]byte, error) {
 	if s.Status == "voided" {
 		right = append(right, text.New("ANULADA", withTop(pdfx.Text(10, true, false, align.Right, pdfx.Danger), 15.5)))
 	}
-	m.AddRows(row.New(max(top, 20)+2).Add(col.New(8).Add(business...), col.New(4).Add(right...)))
+	header := row.New(max(top, 20) + 2)
+	if logo != nil {
+		header.Add(image.NewFromBytesCol(2, logo.Data, logo.Type, props.Rect{Percent: 90}), col.New(6).Add(business...))
+	} else {
+		header.Add(col.New(8).Add(business...))
+	}
+	m.AddRows(header.Add(col.New(4).Add(right...)))
 	m.AddRows(line.NewRow(3, props.Line{Color: pdfx.Amber, Thickness: 0.6, SizePercent: 100}))
 
 	// Sale data.
@@ -192,15 +199,17 @@ func InvoicePDF(s Sale, b settings.Business) ([]byte, error) {
 	}
 
 	footer := []string{
-		"Cambios y devoluciones dentro de 7 días con esta factura, producto sellado y en buen estado.",
 		"Prohibida la venta de bebidas alcohólicas a menores de 18 años. Disfrute con responsabilidad.",
 		"Comprobante interno sin validez fiscal ante la DGI.",
 	}
-	if err := m.RegisterFooter(row.New(14).Add(col.New(12).Add(
-		text.New(footer[0], muted(7.5, align.Center)),
-		text.New(footer[1], withTop(muted(7.5, align.Center), 3.5)),
-		text.New(footer[2], withTop(muted(7.5, align.Center), 7)),
-	))); err != nil {
+	if note != "" {
+		footer = append([]string{note}, footer...)
+	}
+	lines := make([]core.Component, len(footer))
+	for i, l := range footer {
+		lines[i] = text.New(l, withTop(muted(7.5, align.Center), float64(i)*3.5))
+	}
+	if err := m.RegisterFooter(row.New(14).Add(col.New(12).Add(lines...))); err != nil {
 		return nil, fmt.Errorf("invoice footer: %w", err)
 	}
 

@@ -15,6 +15,7 @@ import { inputClassName } from "@/components/ui/field";
 import { Sheet } from "@/components/ui/sheet";
 import { can } from "@/features/auth/api";
 import { useSession } from "@/features/auth/session-store";
+import { salesApi, salesKeys } from "@/features/sales/api";
 import { cn } from "@/lib/cn";
 import { amountToCents, catalogApi, catalogKeys, type Product, type ProductFilters, type ProductInput } from "../api";
 import { productsCopy as copy } from "../copy";
@@ -36,6 +37,7 @@ export function ProductsPage() {
   const categories = useQuery({ queryKey: catalogKeys.masters("categories"), queryFn: () => catalogApi.masters("categories") });
   const brands = useQuery({ queryKey: catalogKeys.masters("brands"), queryFn: () => catalogApi.masters("brands") });
   const units = useQuery({ queryKey: catalogKeys.masters("units"), queryFn: () => catalogApi.masters("units") });
+  const store = useQuery({ queryKey: salesKeys.store, queryFn: salesApi.store });
   const refresh = () => queryClient.invalidateQueries({ queryKey: catalogKeys.products });
   const resetPage = <T,>(set: (v: T) => void) => (v: T) => { set(v); setPage(1); };
 
@@ -182,12 +184,13 @@ export function ProductsPage() {
 
       <Sheet open={sheet.open} onClose={() => setSheet({ open: false, product: null })} title={sheet.product ? copy.form.editTitle : copy.form.createTitle} size="lg">
         <ProductForm
-          key={sheet.product?.id ?? "new"}
+          key={sheet.product?.id ?? `new-${store.data?.tax.defaultPercent}`}
           product={sheet.product}
           categories={categories.data ?? []}
           brands={brands.data ?? []}
           units={units.data ?? []}
           canEditPrices={can(me, "products:authorize")}
+          defaultTax={store.data?.tax.defaultPercent}
           onCancel={() => setSheet({ open: false, product: null })}
           onSubmit={save}
           onUploadImage={(file) => updateImage(() => catalogApi.uploadImage(sheet.product!.id, file), copy.notices.imageSaved)}
