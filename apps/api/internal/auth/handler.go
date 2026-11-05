@@ -27,14 +27,15 @@ func NewHandler(svc *Service, cookieSecure bool) *Handler {
 
 // Routes mounts /auth. Credential endpoints are rate limited per IP on top of the per-account lockout.
 func (h *Handler) Routes(r chi.Router) {
+	limit := httprate.Limit(10, time.Minute,
+		httprate.WithKeyFuncs(httprate.KeyByIP, httprate.KeyByEndpoint),
+		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
+			httpx.Fail(w, r, apperr.ErrTooManyRequests)
+		}),
+	)
 	r.Route("/auth", func(r chi.Router) {
 		r.Group(func(r chi.Router) {
-			r.Use(httprate.Limit(10, time.Minute,
-				httprate.WithKeyFuncs(httprate.KeyByIP, httprate.KeyByEndpoint),
-				httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
-					httpx.Fail(w, r, apperr.ErrTooManyRequests)
-				}),
-			))
+			r.Use(limit)
 			r.Post("/login", h.login)
 			r.Post("/forgot-password", h.forgotPassword)
 			r.Post("/reset-password", h.resetPassword)
@@ -46,6 +47,7 @@ func (h *Handler) Routes(r chi.Router) {
 			r.Use(Authenticate(h.svc))
 			r.Get("/me", h.me)
 			r.Post("/change-password", h.changePassword)
+			r.With(limit).Post("/pin", h.setPIN)
 		})
 	})
 }
@@ -112,6 +114,25 @@ func (h *Handler) changePassword(w http.ResponseWriter, r *http.Request) {
 	}
 	p, _ := FromContext(r.Context())
 	if err := h.svc.ChangePassword(r.Context(), p, req.CurrentPassword, req.NewPassword); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	httpx.NoContent(w)
+}
+
+type setPINRequest struct {
+	CurrentPassword string `json:"currentPassword" validate:"required,max=128"`
+	PIN             string `json:"pin" validate:"required"`
+}
+
+func (h *Handler) setPIN(w http.ResponseWriter, r *http.Request) {
+	var req setPINRequest
+	if err := httpx.Bind(w, r, &req); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	p, _ := FromContext(r.Context())
+	if err := h.svc.SetPIN(r.Context(), p, req.CurrentPassword, req.PIN); err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}

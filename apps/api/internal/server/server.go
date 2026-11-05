@@ -26,6 +26,8 @@ import (
 	"licoreria/api/internal/purchases"
 	"licoreria/api/internal/rates"
 	"licoreria/api/internal/roles"
+	"licoreria/api/internal/sales"
+	"licoreria/api/internal/settings"
 	"licoreria/api/internal/users"
 )
 
@@ -83,6 +85,8 @@ func NewRouter(deps Deps) http.Handler {
 			purchases.NewHandler(purchases.NewService(deps.DB, ledger)).Routes(protected)
 			rates.NewHandler(rates.NewService(deps.DB)).Routes(protected)
 			cash.NewHandler(cash.NewService(deps.DB, deps.Config.AppBaseURL)).Routes(protected)
+			sales.NewHandler(sales.NewService(deps.DB, ledger)).Routes(protected)
+			settings.NewHandler(deps.DB).Routes(protected)
 		})
 	})
 	return r

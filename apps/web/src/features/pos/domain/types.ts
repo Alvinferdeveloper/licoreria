@@ -1,4 +1,5 @@
 import type { Cents, CurrencyCode } from "@/lib/money";
+import type { Discount } from "./discount";
 
 /** A sellable product as the POS needs it; built from the catalog API. */
 export interface PosProduct {
@@ -71,6 +72,8 @@ export interface Customer {
 export interface HeldSale {
   id: string;
   lines: CartLine[];
-  customer: Customer | null;
+  /** Products as last seen, to keep checking stock after resuming. */
+  products: Record<string, PosProduct>;
+  discount: Discount | null;
   heldAt: string;
 }

@@ -2,6 +2,7 @@ package cash
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -65,6 +66,17 @@ func NewService(pool *pgxpool.Pool, appBaseURL string) *Service {
 // seesAll: supervisors and read-only roles see every shift; cashiers only their own.
 func seesAll(p auth.Principal) bool {
 	return p.Can("cash_shifts", "authorize") || !p.Can("cash_shifts", "create")
+}
+
+// OpenShiftFor returns the user's open shift and its register, locking the shift so it
+// cannot close while a sale is being recorded; ErrNoOpenShift when there is none.
+func OpenShiftFor(ctx context.Context, db database.DBTX, userID uuid.UUID) (shiftID, registerID uuid.UUID, err error) {
+	err = db.QueryRow(ctx, `SELECT id, register_id FROM cash_shifts WHERE user_id = $1 AND status = 'open' FOR UPDATE`, userID).
+		Scan(&shiftID, &registerID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return uuid.Nil, uuid.Nil, ErrNoOpenShift
+	}
+	return shiftID, registerID, database.MapError(err, nil)
 }
 
 func (s *Service) Registers(ctx context.Context) ([]Register, error) {

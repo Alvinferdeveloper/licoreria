@@ -2,6 +2,8 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
+import { PinForm } from "@/features/sales/components/pin-form";
+import { can } from "../api";
 import { authCopy } from "../copy";
 import { homePath, safeNext } from "../navigation";
 import { useSession } from "../session-store";
@@ -48,11 +50,14 @@ export function ChangePasswordScreen() {
 }
 
 function ChangePasswordContent() {
-  const required = useSession((s) => s.user?.mustChangePassword ?? false);
+  const user = useSession((s) => s.user);
+  const required = user?.mustChangePassword ?? false;
+  const canAuthorize = can(user, "discounts:authorize") || can(user, "sales:void");
   const copy = authCopy.changePassword;
   return (
     <AuthFrame title={required ? copy.titleRequired : copy.title} intro={required ? copy.introRequired : copy.intro}>
       <ChangePasswordForm />
+      {!required && canAuthorize && <PinForm />}
     </AuthFrame>
   );
 }

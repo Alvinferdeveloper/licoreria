@@ -125,11 +125,16 @@ func (r response) fieldErrors() []string {
 
 func (c *client) do(method, path string, body any) response {
 	c.env.t.Helper()
+	return c.sendJSON(method, path, body, nil)
+}
+
+func (c *client) sendJSON(method, path string, body any, headers map[string]string) response {
+	c.env.t.Helper()
 	if body == nil {
-		return c.send(method, path, nil, "")
+		return c.send(method, path, nil, "", headers)
 	}
 	data, _ := json.Marshal(body)
-	return c.send(method, path, bytes.NewReader(data), "application/json")
+	return c.send(method, path, bytes.NewReader(data), "application/json", headers)
 }
 
 // upload posts one file as multipart/form-data.
@@ -140,14 +145,17 @@ func (c *client) upload(path, field, filename string, content []byte) response {
 	part, _ := form.CreateFormFile(field, filename)
 	_, _ = part.Write(content)
 	_ = form.Close()
-	return c.send(http.MethodPost, path, &buf, form.FormDataContentType())
+	return c.send(http.MethodPost, path, &buf, form.FormDataContentType(), nil)
 }
 
-func (c *client) send(method, path string, body io.Reader, contentType string) response {
+func (c *client) send(method, path string, body io.Reader, contentType string, headers map[string]string) response {
 	c.env.t.Helper()
 	req, _ := http.NewRequest(method, c.env.server.URL+"/api/v1"+path, body)
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
+	}
+	for k, v := range headers {
+		req.Header.Set(k, v)
 	}
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)

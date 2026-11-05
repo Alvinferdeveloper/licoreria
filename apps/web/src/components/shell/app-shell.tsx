@@ -1,6 +1,6 @@
 "use client";
 
-import { AddressBook, CashRegister, ClockCounterClockwise, CurrencyCircleDollar, Package, Vault, ShieldCheck, SignOut, Stack, Tag, Truck, UsersThree, Wine, type Icon } from "@phosphor-icons/react";
+import { AddressBook, CashRegister, ClockCounterClockwise, CurrencyCircleDollar, Package, Receipt, Vault, ShieldCheck, SignOut, Stack, Tag, Truck, UsersThree, Wine, type Icon } from "@phosphor-icons/react";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -23,6 +23,7 @@ const NAV: readonly { label: string; items: readonly NavItem[] }[] = [
     label: "Vender",
     items: [
       { href: "/pos", label: "Punto de venta", icon: CashRegister, permission: "pos:view" },
+      { href: "/ventas", label: "Ventas", icon: Receipt, permission: "sales:view" },
       { href: "/caja", label: "Mi caja", icon: Vault, permission: "cash_shifts:create" },
       { href: "/turnos", label: "Turnos de caja", icon: ClockCounterClockwise, permission: "cash_shifts:view" },
       { href: "/tipo-cambio", label: "Tipo de cambio", icon: CurrencyCircleDollar, permission: "exchange_rates:view" },

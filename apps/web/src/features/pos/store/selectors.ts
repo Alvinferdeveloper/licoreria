@@ -2,15 +2,17 @@
 
 import { useMemo } from "react";
 import { computeTotals, summarizeTender } from "../domain";
-import { POS_EXCHANGE_RATE, usePosStore } from "./pos-store";
+import { usePosStore } from "./pos-store";
 
 export function useCartTotals() {
   const lines = usePosStore((state) => state.lines);
-  return useMemo(() => computeTotals(lines), [lines]);
+  const discount = usePosStore((state) => state.discount);
+  return useMemo(() => computeTotals(lines, discount), [lines, discount]);
 }
 
 export function useTenderSummary() {
   const { total } = useCartTotals();
   const payments = usePosStore((state) => state.payments);
-  return useMemo(() => summarizeTender(total, payments, POS_EXCHANGE_RATE), [total, payments]);
+  const rate = usePosStore((state) => state.rate);
+  return useMemo(() => summarizeTender(total, payments, rate), [total, payments, rate]);
 }

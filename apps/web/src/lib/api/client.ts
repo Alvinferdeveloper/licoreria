@@ -57,6 +57,7 @@ interface RequestOptions {
   /** Skips the automatic refresh-and-retry, used by the auth endpoints themselves. */
   skipRefresh?: boolean;
   signal?: AbortSignal;
+  headers?: Record<string, string>;
 }
 
 export async function api<T>(method: Method, path: string, init: RequestOptions = {}): Promise<T> {
@@ -89,7 +90,7 @@ export function saveBlob(blob: Blob, filename: string) {
 }
 
 async function send(method: Method, path: string, init: RequestOptions, token: string | null) {
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...init.headers };
   if (init.body !== undefined) headers["Content-Type"] = "application/json";
   if (token) headers.Authorization = `Bearer ${token}`;
 

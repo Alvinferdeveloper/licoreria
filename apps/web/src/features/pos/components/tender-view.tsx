@@ -10,8 +10,9 @@ import { cn } from "@/lib/cn";
 import { CURRENCIES, formatRate, nioToUsd, parseAmount, toCents, type CurrencyCode } from "@/lib/money";
 import { posCopy } from "../copy";
 import { amountDue, BILL_SHORTCUTS, paymentInBase, type PaymentMethod } from "../domain";
-import { POS_EXCHANGE_RATE, usePosStore } from "../store/pos-store";
+import { usePosStore } from "../store/pos-store";
 import { useTenderSummary } from "../store/selectors";
+import { AuthorizationForm } from "./authorization-form";
 
 const CURRENCY_OPTIONS = [
   { value: "NIO", label: "C$ Córdobas" },
@@ -31,13 +32,17 @@ export function TenderView() {
   const removePayment = usePosStore((state) => state.removePayment);
   const backToCart = usePosStore((state) => state.backToCart);
   const confirmSale = usePosStore((state) => state.confirmSale);
+  const rate = usePosStore((state) => state.rate);
+  const submitting = usePosStore((state) => state.submitting);
+  const error = usePosStore((state) => state.error);
+  const needsAuthorization = usePosStore((state) => state.needsAuthorization);
   const tender = useTenderSummary();
 
   const [currency, setCurrency] = useState<CurrencyCode>("NIO");
   const [method, setMethod] = useState<PaymentMethod>("cash");
   const [amountInput, setAmountInput] = useState("");
 
-  const due = amountDue(tender.remaining, currency, POS_EXCHANGE_RATE);
+  const due = amountDue(tender.remaining, currency, rate);
   const symbol = CURRENCIES[currency].symbol;
 
   const pay = (amount: number) => {
@@ -50,7 +55,7 @@ export function TenderView() {
     event.preventDefault();
     const amount = parseAmount(amountInput);
     if (amount) return pay(amount);
-    if (!amountInput.trim() && tender.isCovered) confirmSale();
+    if (!amountInput.trim() && tender.isCovered) void confirmSale();
   };
 
   return (
@@ -83,14 +88,14 @@ export function TenderView() {
                 className={cn("block text-total font-semibold tracking-display", payments.length > 0 && "text-danger")}
               />
               <Money
-                cents={nioToUsd(tender.remaining, POS_EXCHANGE_RATE)}
+                cents={nioToUsd(tender.remaining, rate)}
                 currency="USD"
                 className="mt-1 block text-title text-ink-muted"
               />
             </>
           )}
           <p className="mt-2 text-caption text-ink-subtle">
-            {posCopy.tender.rateUsed(formatRate(POS_EXCHANGE_RATE))}
+            {posCopy.tender.rateUsed(formatRate(rate))}
           </p>
         </div>
 
@@ -147,7 +152,7 @@ export function TenderView() {
                   <span className="text-right">
                     <Money cents={payment.amount} currency={payment.currency} className="block font-mono font-medium" />
                     {payment.currency === "USD" && (
-                      <Money cents={paymentInBase(payment, POS_EXCHANGE_RATE)} className="block font-mono text-caption text-ink-muted" />
+                      <Money cents={paymentInBase(payment, rate)} className="block font-mono text-caption text-ink-muted" />
                     )}
                   </span>
                   <Button variant="ghost" size="icon-sm" aria-label={posCopy.tender.remove} onClick={() => removePayment(payment.id)}>
@@ -160,11 +165,20 @@ export function TenderView() {
         )}
       </div>
 
-      <footer className="border-t border-line px-5 pt-4 pb-5">
-        <Button variant="primary" size="xl" className="w-full justify-between" disabled={!tender.isCovered} onClick={confirmSale}>
-          {posCopy.tender.confirm}
-          <Kbd className="bg-on-accent/15 text-on-accent">{posCopy.shortcuts.confirm}</Kbd>
-        </Button>
+      <footer className="space-y-3 border-t border-line px-5 pt-4 pb-5">
+        {error && (
+          <p role="alert" className="rounded-md bg-danger-tint px-3 py-2 text-label text-danger">
+            {error}
+          </p>
+        )}
+        {needsAuthorization ? (
+          <AuthorizationForm busy={submitting} onSubmit={(authorization) => void confirmSale(authorization)} />
+        ) : (
+          <Button variant="primary" size="xl" className="w-full justify-between" disabled={!tender.isCovered} loading={submitting} onClick={() => void confirmSale()}>
+            {submitting ? posCopy.tender.saving : posCopy.tender.confirm}
+            <Kbd className="bg-on-accent/15 text-on-accent">{posCopy.shortcuts.confirm}</Kbd>
+          </Button>
+        )}
       </footer>
     </>
   );

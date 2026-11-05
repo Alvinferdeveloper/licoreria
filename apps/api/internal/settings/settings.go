@@ -51,6 +51,21 @@ func GetSecurity(ctx context.Context, db database.DBTX) (Security, error) {
 	return value, get(ctx, db, "security", &value)
 }
 
+// POS holds the point-of-sale rules; DiscountLimitPercent is the most a role without
+// discounts:authorize may discount without an administrator's PIN.
+type POS struct {
+	DiscountLimitPercent float64 `json:"discountLimitPercent"`
+	AllowNegativeStock   bool    `json:"allowNegativeStock"`
+	DefaultPrintFormat   string  `json:"defaultPrintFormat"`
+}
+
+var DefaultPOS = POS{DiscountLimitPercent: 5, DefaultPrintFormat: "ticket"}
+
+func GetPOS(ctx context.Context, db database.DBTX) (POS, error) {
+	value := DefaultPOS
+	return value, get(ctx, db, "pos", &value)
+}
+
 // get decodes the stored JSON over dst; fields absent from the JSON keep their defaults.
 func get(ctx context.Context, db database.DBTX, key string, dst any) error {
 	var raw []byte
