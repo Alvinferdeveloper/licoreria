@@ -33,7 +33,7 @@ func RecipientsWithPermission(ctx context.Context, db database.DBTX, module, act
 		SELECT DISTINCT u.full_name, u.email::text FROM users u
 		JOIN role_permissions rp ON rp.role_id = u.role_id
 		JOIN permissions p ON p.id = rp.permission_id
-		WHERE u.active AND p.module = $1 AND p.action = $2`, module, action)
+		WHERE u.active AND u.email IS NOT NULL AND p.module = $1 AND p.action = $2`, module, action)
 	if err != nil {
 		return nil, fmt.Errorf("list recipients: %w", err)
 	}

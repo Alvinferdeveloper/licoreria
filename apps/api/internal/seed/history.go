@@ -230,8 +230,8 @@ func (h *history) addCashiers(ctx context.Context) error {
 		}
 		var id uuid.UUID
 		err = h.tx.QueryRow(ctx, `
-			INSERT INTO users (full_name, email, username, password_hash, role_id)
-			SELECT $1, $2, $3, $4, id FROM roles WHERE code = 'cashier' RETURNING id`,
+			INSERT INTO users (full_name, email, username, password_hash, role_id, activated_at)
+			SELECT $1, $2, $3, $4, id, now() - interval '90 days' FROM roles WHERE code = 'cashier' RETURNING id`,
 			c.name, c.username+"@example.com", c.username, hash).Scan(&id)
 		if err != nil {
 			return err

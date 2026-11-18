@@ -1,5 +1,5 @@
-// Package users manages accounts: creation with a temporary password, edits,
-// activation and resending access. Users are deactivated, never deleted.
+// Package users manages accounts: creation with an invitation (emailed link or counter
+// code), edits, activation status and new access codes. Users are deactivated, never deleted.
 package users
 
 import (
@@ -19,11 +19,12 @@ import (
 type User struct {
 	ID                 uuid.UUID  `json:"id"`
 	FullName           string     `json:"fullName"`
-	Email              string     `json:"email"`
+	Email              *string    `json:"email"`
 	Username           string     `json:"username"`
 	Role               RoleRef    `json:"role"`
 	Active             bool       `json:"active"`
 	MustChangePassword bool       `json:"mustChangePassword"`
+	PendingActivation  bool       `json:"pendingActivation"`
 	LastLoginAt        *time.Time `json:"lastLoginAt"`
 	CreatedAt          time.Time  `json:"createdAt"`
 }
@@ -57,15 +58,15 @@ var constraintFields = database.ConstraintFields{
 type Repository struct{}
 
 const selectUser = `
-	SELECT u.id, u.full_name, u.email, u.username, r.id, r.code, r.name,
-	       u.active, u.must_change_password, u.last_login_at, u.created_at
+	SELECT u.id, u.full_name, u.email::text, u.username, r.id, r.code, r.name,
+	       u.active, u.must_change_password, u.activated_at IS NULL, u.last_login_at, u.created_at
 	FROM users u
 	JOIN roles r ON r.id = u.role_id`
 
 func scanUser(row pgx.Row) (User, error) {
 	var u User
 	err := row.Scan(&u.ID, &u.FullName, &u.Email, &u.Username, &u.Role.ID, &u.Role.Code, &u.Role.Name,
-		&u.Active, &u.MustChangePassword, &u.LastLoginAt, &u.CreatedAt)
+		&u.Active, &u.MustChangePassword, &u.PendingActivation, &u.LastLoginAt, &u.CreatedAt)
 	return u, err
 }
 
@@ -109,18 +110,22 @@ func (Repository) get(ctx context.Context, db database.DBTX, id uuid.UUID) (User
 	return u, database.MapError(err, nil)
 }
 
-func (Repository) create(ctx context.Context, db database.DBTX, in Input, passwordHash string, expiresAt time.Time) (uuid.UUID, error) {
+// create inserts a user. With temporaryUntil the password is a temporary one the user
+// must change; without it the account stays pending until activated.
+func (Repository) create(ctx context.Context, db database.DBTX, in Input, passwordHash string, temporaryUntil *time.Time) (uuid.UUID, error) {
 	var id uuid.UUID
 	err := db.QueryRow(ctx, `
-		INSERT INTO users (full_name, email, username, password_hash, role_id, must_change_password, password_expires_at)
-		VALUES ($1, $2, $3, $4, $5, true, $6)
-		RETURNING id`, in.FullName, in.Email, in.Username, passwordHash, in.RoleID, expiresAt).Scan(&id)
+		INSERT INTO users (full_name, email, username, password_hash, role_id,
+		                   must_change_password, password_expires_at, activated_at)
+		VALUES ($1, NULLIF($2, ''), $3, $4, $5,
+		        $6::timestamptz IS NOT NULL, $6, CASE WHEN $6::timestamptz IS NOT NULL THEN now() END)
+		RETURNING id`, in.FullName, in.Email, in.Username, passwordHash, in.RoleID, temporaryUntil).Scan(&id)
 	return id, database.MapError(err, constraintFields)
 }
 
 func (Repository) update(ctx context.Context, db database.DBTX, id uuid.UUID, in Input) error {
 	tag, err := db.Exec(ctx, `
-		UPDATE users SET full_name = $2, email = $3, username = $4, role_id = $5 WHERE id = $1`,
+		UPDATE users SET full_name = $2, email = NULLIF($3, ''), username = $4, role_id = $5 WHERE id = $1`,
 		id, in.FullName, in.Email, in.Username, in.RoleID)
 	if err != nil {
 		return database.MapError(err, constraintFields)
@@ -136,12 +141,9 @@ func (Repository) setActive(ctx context.Context, db database.DBTX, id uuid.UUID,
 	return database.MapError(err, nil)
 }
 
-func (Repository) setTemporaryPassword(ctx context.Context, db database.DBTX, id uuid.UUID, passwordHash string, expiresAt time.Time) error {
-	_, err := db.Exec(ctx, `
-		UPDATE users
-		SET password_hash = $2, must_change_password = true, password_expires_at = $3,
-		    failed_attempts = 0, locked_until = NULL
-		WHERE id = $1`, id, passwordHash, expiresAt)
+// clearLockout lifts a lockout so a freshly issued code can be used right away.
+func (Repository) clearLockout(ctx context.Context, db database.DBTX, id uuid.UUID) error {
+	_, err := db.Exec(ctx, `UPDATE users SET failed_attempts = 0, locked_until = NULL WHERE id = $1`, id)
 	return database.MapError(err, nil)
 }
 

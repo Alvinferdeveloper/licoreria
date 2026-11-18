@@ -161,8 +161,8 @@ func createAdmin(cfg config.Config, args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("\nAdministrador creado: %s (%s)\nUsuario: %s\nContraseña temporal: %s\n\nSe pedirá cambiarla en el primer inicio de sesión.\n\n",
-		admin.FullName, admin.Email, admin.Username, temp)
+	fmt.Printf("\nAdministrador creado: %s\nUsuario: %s\nContraseña temporal: %s\n\nSe pedirá cambiarla en el primer inicio de sesión.\n\n",
+		admin.FullName, admin.Username, temp)
 	return nil
 }
 

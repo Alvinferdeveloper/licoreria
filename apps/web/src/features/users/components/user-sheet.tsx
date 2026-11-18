@@ -17,7 +17,7 @@ const { form: copy, validation } = usersCopy;
 
 const schema = z.object({
   fullName: z.string().trim().min(3, validation.fullName).max(120),
-  email: z.string().trim().min(1, validation.required).pipe(z.email(validation.email)),
+  email: z.union([z.literal(""), z.email(validation.email)]),
   username: z.string().trim().regex(/^[a-zA-Z0-9._-]{3,32}$/, validation.username),
   roleId: z.string().min(1, validation.required),
 });
@@ -53,7 +53,7 @@ function UserForm({ user, roles, onCancel, onSubmit }: UserFormProps) {
   const form = useForm<UserInput>({
     resolver: zodResolver(schema),
     defaultValues: user
-      ? { fullName: user.fullName, email: user.email, username: user.username, roleId: user.role.id }
+      ? { fullName: user.fullName, email: user.email ?? "", username: user.username, roleId: user.role.id }
       : { fullName: "", email: "", username: "", roleId: "" },
   });
   const { errors, isSubmitting } = form.formState;
@@ -71,13 +71,20 @@ function UserForm({ user, roles, onCancel, onSubmit }: UserFormProps) {
     <form onSubmit={submit} noValidate className="space-y-5">
       {formError && <Alert>{formError}</Alert>}
       <Field label={copy.fullName} error={errors.fullName?.message}>
-        <Input autoComplete="off" autoFocus {...form.register("fullName")} />
+        <Input autoComplete="off" autoFocus placeholder={copy.fullNamePlaceholder} {...form.register("fullName")} />
       </Field>
-      <Field label={copy.email} error={errors.email?.message}>
-        <Input type="email" autoComplete="off" {...form.register("email")} />
+      <Field label={copy.email} hint={copy.emailHint} error={errors.email?.message}>
+        <Input type="email" autoComplete="off" placeholder={copy.emailPlaceholder} {...form.register("email", { setValueAs: (v: string) => v.trim() })} />
       </Field>
       <Field label={copy.username} hint={copy.usernameHint} error={errors.username?.message}>
-        <Input autoComplete="off" autoCapitalize="none" spellCheck={false} className="font-mono" {...form.register("username")} />
+        <Input
+          autoComplete="off"
+          autoCapitalize="none"
+          spellCheck={false}
+          className="font-mono"
+          placeholder={copy.usernamePlaceholder}
+          {...form.register("username")}
+        />
       </Field>
       <Field label={copy.role} error={errors.roleId?.message}>
         <select className={inputClassName} {...form.register("roleId")}>

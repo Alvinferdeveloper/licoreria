@@ -11,6 +11,7 @@ import (
 
 	"licoreria/api/internal/apperr"
 	"licoreria/api/internal/audit"
+	"licoreria/api/internal/auth"
 	"licoreria/api/internal/httpx"
 	"licoreria/api/internal/mail"
 	"licoreria/api/internal/platform/database"
@@ -22,13 +23,30 @@ var (
 	errUnknownRole = apperr.Validation(apperr.FieldError{
 		Field: "roleId", Code: "invalid_reference", Message: "El rol seleccionado no existe.",
 	})
+	errNoEmail = apperr.Validation(apperr.FieldError{
+		Field: "channel", Code: "no_email", Message: "Este usuario no tiene correo. Genera un código de acceso.",
+	})
 	ErrSelfDeactivation = apperr.New(apperr.KindConflict, "self_deactivation", "No puedes desactivar tu propia cuenta.")
 	ErrSelfRoleChange   = apperr.New(apperr.KindConflict, "self_role_change", "No puedes cambiar tu propio rol.")
 	ErrLastAdmin        = apperr.New(apperr.KindConflict, "last_admin", "Debe quedar al menos un administrador activo.")
-	ErrInactiveUser     = apperr.New(apperr.KindConflict, "user_inactive", "Activa la cuenta antes de reenviar el acceso.")
+	ErrInactiveUser     = apperr.New(apperr.KindConflict, "user_inactive", "Activa la cuenta antes de enviar un acceso.")
 )
 
 const adminRoleCode = "admin"
+
+// Access channels: an emailed one-time link, or a code the admin hands over at the counter.
+const (
+	ChannelEmail = "email"
+	ChannelCode  = "code"
+)
+
+// Access tells the admin how the user will get in. Code is only set for the counter channel
+// and is shown once: only its hash is stored.
+type Access struct {
+	Channel   string    `json:"channel"`
+	Code      string    `json:"code,omitempty"`
+	ExpiresAt time.Time `json:"expiresAt"`
+}
 
 type Service struct {
 	pool       *pgxpool.Pool
@@ -58,34 +76,41 @@ func normalize(in Input) Input {
 	}
 }
 
-// Create adds a user with a temporary password and queues the welcome email in the same transaction.
-func (s *Service) Create(ctx context.Context, actor uuid.UUID, in Input) (User, error) {
+// Create adds a pending user and issues their invitation in the same transaction:
+// by email when they have one, otherwise as a counter code.
+func (s *Service) Create(ctx context.Context, actor uuid.UUID, in Input) (User, Access, error) {
 	in = normalize(in)
 	if _, err := s.repo.roleCode(ctx, s.pool, in.RoleID); err != nil {
-		return User{}, err
+		return User{}, Access{}, err
+	}
+	unusable, err := unusablePasswordHash()
+	if err != nil {
+		return User{}, Access{}, err
 	}
 
 	var created User
-	err := database.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
-		temp, hash, expiresAt, err := s.temporaryPassword(ctx, tx)
-		if err != nil {
-			return err
-		}
-		id, err := s.repo.create(ctx, tx, in, hash, expiresAt)
+	var access Access
+	err = database.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
+		id, err := s.repo.create(ctx, tx, in, unusable, nil)
 		if err != nil {
 			return err
 		}
 		if created, err = s.repo.get(ctx, tx, id); err != nil {
 			return err
 		}
-		if err := s.sendAccess(ctx, tx, created, temp, expiresAt); err != nil {
+		channel := ChannelCode
+		if created.Email != nil {
+			channel = ChannelEmail
+		}
+		if access, err = s.issueAccess(ctx, tx, created, channel); err != nil {
 			return err
 		}
 		return audit.Record(ctx, tx, audit.Entry{
-			UserID: &actor, Action: audit.ActionUserCreated, Entity: "users", EntityID: &id, After: created,
+			UserID: &actor, Action: audit.ActionUserCreated, Entity: "users", EntityID: &id,
+			After: map[string]any{"user": created, "channel": channel},
 		})
 	})
-	return created, err
+	return created, access, err
 }
 
 func (s *Service) Update(ctx context.Context, actor, id uuid.UUID, in Input) (User, error) {
@@ -163,9 +188,11 @@ func (s *Service) SetActive(ctx context.Context, actor, id uuid.UUID, active boo
 	return updated, err
 }
 
-// ResendAccess issues a fresh temporary password, for a lost email or an expired temporary password.
-func (s *Service) ResendAccess(ctx context.Context, actor, id uuid.UUID) error {
-	return database.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
+// ResendAccess issues a new link or code: for a lost invitation, an expired one, or a user
+// without email who forgot their password. The current password keeps working until it's used.
+func (s *Service) ResendAccess(ctx context.Context, actor, id uuid.UUID, channel string) (Access, error) {
+	var access Access
+	err := database.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
 		user, err := s.repo.get(ctx, tx, id)
 		if err != nil {
 			return err
@@ -173,23 +200,18 @@ func (s *Service) ResendAccess(ctx context.Context, actor, id uuid.UUID) error {
 		if !user.Active {
 			return ErrInactiveUser
 		}
-		temp, hash, expiresAt, err := s.temporaryPassword(ctx, tx)
-		if err != nil {
+		if err := s.repo.clearLockout(ctx, tx, id); err != nil {
 			return err
 		}
-		if err := s.repo.setTemporaryPassword(ctx, tx, id, hash, expiresAt); err != nil {
-			return err
-		}
-		if err := s.repo.revokeSessions(ctx, tx, id); err != nil {
-			return err
-		}
-		if err := s.sendAccess(ctx, tx, user, temp, expiresAt); err != nil {
+		if access, err = s.issueAccess(ctx, tx, user, channel); err != nil {
 			return err
 		}
 		return audit.Record(ctx, tx, audit.Entry{
 			UserID: &actor, Action: audit.ActionUserAccessResent, Entity: "users", EntityID: &id,
+			After: map[string]string{"channel": channel},
 		})
 	})
+	return access, err
 }
 
 // CreateInitialAdmin bootstraps the first administrator from the CLI and returns the
@@ -204,13 +226,19 @@ func (s *Service) CreateInitialAdmin(ctx context.Context, fullName, email, usern
 	var created User
 	var temp string
 	err := database.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
-		var hash string
-		var expiresAt time.Time
-		var err error
-		if temp, hash, expiresAt, err = s.temporaryPassword(ctx, tx); err != nil {
+		security, err := settings.GetSecurity(ctx, tx)
+		if err != nil {
 			return err
 		}
-		id, err := s.repo.create(ctx, tx, in, hash, expiresAt)
+		if temp, err = password.GenerateTemporary(); err != nil {
+			return err
+		}
+		hash, err := password.Hash(temp)
+		if err != nil {
+			return err
+		}
+		expiresAt := s.now().Add(security.TempPasswordTTL())
+		id, err := s.repo.create(ctx, tx, in, hash, &expiresAt)
 		if err != nil {
 			return err
 		}
@@ -222,33 +250,54 @@ func (s *Service) CreateInitialAdmin(ctx context.Context, fullName, email, usern
 	return created, temp, err
 }
 
-func (s *Service) temporaryPassword(ctx context.Context, db database.DBTX) (plain, hash string, expiresAt time.Time, err error) {
+// issueAccess stores a fresh activation secret (replacing earlier ones) and delivers it.
+func (s *Service) issueAccess(ctx context.Context, db database.DBTX, u User, channel string) (Access, error) {
 	security, err := settings.GetSecurity(ctx, db)
 	if err != nil {
-		return "", "", time.Time{}, err
+		return Access{}, err
 	}
-	if plain, err = password.GenerateTemporary(); err != nil {
-		return "", "", time.Time{}, err
-	}
-	if hash, err = password.Hash(plain); err != nil {
-		return "", "", time.Time{}, err
-	}
-	return plain, hash, s.now().Add(security.TempPasswordTTL()), nil
-}
+	access := Access{Channel: channel, ExpiresAt: s.now().Add(security.TempPasswordTTL())}
 
-func (s *Service) sendAccess(ctx context.Context, db database.DBTX, u User, temp string, expiresAt time.Time) error {
+	if channel == ChannelCode {
+		code, hash, err := auth.NewActivationCode()
+		if err != nil {
+			return Access{}, err
+		}
+		access.Code = code
+		return access, auth.IssueActivation(ctx, db, u.ID, hash, access.ExpiresAt)
+	}
+
+	if u.Email == nil {
+		return Access{}, errNoEmail
+	}
+	token, hash, err := auth.NewOpaqueToken()
+	if err != nil {
+		return Access{}, err
+	}
+	if err := auth.IssueActivation(ctx, db, u.ID, hash, access.ExpiresAt); err != nil {
+		return Access{}, err
+	}
 	business, err := settings.GetBusiness(ctx, db)
 	if err != nil {
-		return err
+		return Access{}, err
 	}
-	return mail.Enqueue(ctx, db, mail.TemplateWelcome, u.Email, map[string]any{
-		"StoreName":         business.Name,
-		"Name":              u.FullName,
-		"Username":          u.Username,
-		"TemporaryPassword": temp,
-		"LoginURL":          s.appBaseURL + "/login",
-		"ExpiresInHours":    int(expiresAt.Sub(s.now()).Round(time.Hour).Hours()),
+	return access, mail.Enqueue(ctx, db, mail.TemplateWelcome, *u.Email, map[string]any{
+		"StoreName":      business.Name,
+		"Name":           u.FullName,
+		"Username":       u.Username,
+		"ActivateURL":    s.appBaseURL + "/activar?token=" + token,
+		"ExpiresInHours": int(access.ExpiresAt.Sub(s.now()).Round(time.Hour).Hours()),
 	})
+}
+
+// unusablePasswordHash hashes a random secret nobody knows, so a pending account
+// has no working password until it is activated.
+func unusablePasswordHash() (string, error) {
+	secret, _, err := auth.NewOpaqueToken()
+	if err != nil {
+		return "", err
+	}
+	return password.Hash(secret)
 }
 
 func (s *Service) ensureAnotherAdmin(ctx context.Context, db database.DBTX, excluded uuid.UUID) error {

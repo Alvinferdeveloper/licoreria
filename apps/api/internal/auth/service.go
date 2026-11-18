@@ -91,6 +91,11 @@ func (s *Service) Login(ctx context.Context, identifier, plainPassword string) (
 		s.auditFailure(ctx, nil, identifier, "unknown_user")
 		return Session{}, ErrInvalidCredentials
 	}
+	if !creds.Activated {
+		_, _ = password.Verify(plainPassword, password.DummyHash)
+		s.auditFailure(ctx, &creds.UserID, identifier, "pending_activation")
+		return Session{}, ErrInvalidCredentials
+	}
 
 	now := s.now()
 	if creds.LockedUntil != nil && creds.LockedUntil.After(now) {
@@ -369,7 +374,7 @@ func (s *Service) ResetPassword(ctx context.Context, token, next string) error {
 	}
 
 	return database.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
-		userID, ok, err := s.repo.consumeAuthToken(ctx, tx, HashToken(token), purposePasswordReset)
+		userID, ok, err := s.repo.consumeAuthToken(ctx, tx, HashToken(token), purposePasswordReset, nil)
 		if err != nil {
 			return err
 		}

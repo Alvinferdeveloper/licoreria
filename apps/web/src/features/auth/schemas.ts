@@ -35,6 +35,15 @@ export const resetPasswordSchema = z
   .object({ newPassword, confirmPassword })
   .refine(passwordsMatch.check, passwordsMatch.options);
 
+export const codeActivationSchema = z
+  .object({
+    username: z.string().trim().min(1, validation.required),
+    code: z.string().trim().min(1, validation.required),
+    newPassword,
+    confirmPassword,
+  })
+  .refine(passwordsMatch.check, passwordsMatch.options);
+
 export const forgotPasswordSchema = z.object({
   email: z.string().trim().min(1, validation.required).pipe(z.email(validation.email)),
 });
@@ -43,3 +52,4 @@ export type LoginValues = z.infer<typeof loginSchema>;
 export type ChangePasswordValues = z.infer<typeof changePasswordSchema>;
 export type ResetPasswordValues = z.infer<typeof resetPasswordSchema>;
 export type ForgotPasswordValues = z.infer<typeof forgotPasswordSchema>;
+export type CodeActivationValues = z.infer<typeof codeActivationSchema>;

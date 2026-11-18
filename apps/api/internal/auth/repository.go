@@ -25,16 +25,19 @@ type credentials struct {
 	MustChangePassword bool
 	PasswordExpiresAt  *time.Time
 	LockedUntil        *time.Time
+	Activated          bool
 }
 
 // findCredentials looks a user up by username or email (both case-insensitive).
 func (Repository) findCredentials(ctx context.Context, db database.DBTX, identifier string) (credentials, bool, error) {
 	var c credentials
 	err := db.QueryRow(ctx, `
-		SELECT id, full_name, email, password_hash, active, must_change_password, password_expires_at, locked_until
+		SELECT id, full_name, COALESCE(email::text, ''), password_hash, active, must_change_password,
+		       password_expires_at, locked_until, activated_at IS NOT NULL
 		FROM users
 		WHERE username = $1 OR email = $1`, identifier).
-		Scan(&c.UserID, &c.FullName, &c.Email, &c.PasswordHash, &c.Active, &c.MustChangePassword, &c.PasswordExpiresAt, &c.LockedUntil)
+		Scan(&c.UserID, &c.FullName, &c.Email, &c.PasswordHash, &c.Active, &c.MustChangePassword,
+			&c.PasswordExpiresAt, &c.LockedUntil, &c.Activated)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return credentials{}, false, nil
 	}
@@ -129,7 +132,7 @@ func (Repository) revokeAllSessions(ctx context.Context, db database.DBTX, userI
 func (Repository) loadPrincipal(ctx context.Context, db database.DBTX, userID, sessionID uuid.UUID) (Principal, bool, error) {
 	p := Principal{SessionID: sessionID}
 	err := db.QueryRow(ctx, `
-		SELECT u.id, u.full_name, u.email, u.username, u.must_change_password,
+		SELECT u.id, u.full_name, COALESCE(u.email::text, ''), u.username, u.must_change_password,
 		       r.id, r.code, r.name,
 		       COALESCE(array_agg(p.module || ':' || p.action ORDER BY p.module, p.action)
 		                FILTER (WHERE p.id IS NOT NULL), '{}')
@@ -187,7 +190,7 @@ func (Repository) setPassword(ctx context.Context, db database.DBTX, userID uuid
 		)
 		UPDATE users
 		SET password_hash = $2, must_change_password = false, password_expires_at = NULL,
-		    failed_attempts = 0, locked_until = NULL
+		    failed_attempts = 0, locked_until = NULL, activated_at = COALESCE(activated_at, now())
 		WHERE id = $1`, userID, newHash)
 	if err != nil {
 		return fmt.Errorf("set password: %w", err)
@@ -223,13 +226,17 @@ func (Repository) createAuthToken(ctx context.Context, db database.DBTX, userID 
 	return nil
 }
 
-// consumeAuthToken marks a valid token as used and returns its user; ok is false if it is unknown, used or expired.
-func (Repository) consumeAuthToken(ctx context.Context, db database.DBTX, tokenHash, purpose string) (uuid.UUID, bool, error) {
+// consumeAuthToken marks a valid token as used and returns its user; ok is false if it is unknown,
+// used, expired, belongs to an inactive user or, when owner is set, to someone else.
+func (Repository) consumeAuthToken(ctx context.Context, db database.DBTX, tokenHash, purpose string, owner *uuid.UUID) (uuid.UUID, bool, error) {
 	var userID uuid.UUID
 	err := db.QueryRow(ctx, `
-		UPDATE auth_tokens SET used_at = now()
-		WHERE token_hash = $1 AND purpose = $2 AND used_at IS NULL AND expires_at > now()
-		RETURNING user_id`, tokenHash, purpose).Scan(&userID)
+		UPDATE auth_tokens t SET used_at = now()
+		FROM users u
+		WHERE u.id = t.user_id AND u.active
+		  AND t.token_hash = $1 AND t.purpose = $2 AND t.used_at IS NULL AND t.expires_at > now()
+		  AND ($3::uuid IS NULL OR t.user_id = $3)
+		RETURNING t.user_id`, tokenHash, purpose, owner).Scan(&userID)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return uuid.Nil, false, nil
 	}

@@ -87,7 +87,7 @@ func messageFor(fe validator.FieldError) string {
 	isText := fe.Kind() == reflect.String
 
 	switch fe.Tag() {
-	case "required", "required_if", "required_unless":
+	case "required", "required_if", "required_unless", "required_with", "required_without":
 		return "Este campo es obligatorio."
 	case "email":
 		return "Ingresa un correo electrónico válido."

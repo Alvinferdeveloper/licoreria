@@ -112,10 +112,7 @@ func TestProductCostVisibilityAndPriceRules(t *testing.T) {
 		"fullName": "Pedro Bodega", "email": "pedro@elbarril.ni", "username": "pedro", "roleId": env.roleID("warehouse"),
 	})
 	expectStatus(t, res, http.StatusCreated, "create warehouse user")
-	temp := extract(t, tempPasswordPattern, env.latestEmail("pedro@elbarril.ni"))
-	warehouse := env.newClient()
-	warehouse.login("pedro", temp)
-	warehouse.do(http.MethodPost, "/auth/change-password", map[string]string{"currentPassword": temp, "newPassword": "Bodega2026Turno"})
+	warehouse := env.activateFromEmail("pedro@elbarril.ni", "pedro", "Bodega2026Turno")
 
 	product["price"] = "399.00"
 	res = warehouse.do(http.MethodPut, "/products/"+id, product)

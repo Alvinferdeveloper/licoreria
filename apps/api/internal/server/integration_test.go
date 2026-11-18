@@ -15,6 +15,7 @@ import (
 	"os"
 	"regexp"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -226,10 +227,7 @@ func (e *testEnv) roleID(code string) string {
 	return id
 }
 
-var (
-	tempPasswordPattern = regexp.MustCompile(`Contraseña temporal: <strong[^>]*>([^<]+)</strong>`)
-	resetTokenPattern   = regexp.MustCompile(`token=([A-Za-z0-9_-]+)`)
-)
+var resetTokenPattern = regexp.MustCompile(`token=([A-Za-z0-9_-]+)`)
 
 // latestEmail returns the newest queued email body sent to the address.
 func (e *testEnv) latestEmail(to string) string {
@@ -267,14 +265,64 @@ func (e *testEnv) createCashier(admin *client) *client {
 		"fullName": "Marvin Téllez", "email": "marvin@elbarril.ni", "username": "marvin", "roleId": e.roleID("cashier"),
 	})
 	expectStatus(e.t, res, http.StatusCreated, "create cashier")
+	return e.activateFromEmail("marvin@elbarril.ni", "marvin", "Caja1Turno2026")
+}
 
-	temp := extract(e.t, tempPasswordPattern, e.latestEmail("marvin@elbarril.ni"))
-	cashier := e.newClient()
-	expectStatus(e.t, cashier.login("marvin", temp), http.StatusOK, "cashier first login")
-	expectStatus(e.t, cashier.do(http.MethodPost, "/auth/change-password", map[string]string{
-		"currentPassword": temp, "newPassword": "Caja1Turno2026",
-	}), http.StatusNoContent, "cashier password change")
-	return cashier
+// activateFromEmail follows the invitation link sent to the address and logs the user in.
+func (e *testEnv) activateFromEmail(email, username, newPassword string) *client {
+	e.t.Helper()
+	token := extract(e.t, resetTokenPattern, e.latestEmail(email))
+	c := e.newClient()
+	expectStatus(e.t, c.do(http.MethodPost, "/auth/activate", map[string]string{
+		"token": token, "newPassword": newPassword,
+	}), http.StatusNoContent, "activate "+username)
+	expectStatus(e.t, c.login(username, newPassword), http.StatusOK, "first login "+username)
+	return c
+}
+
+func TestCounterCodeActivation(t *testing.T) {
+	env := newTestEnv(t)
+	admin := env.createAdmin()
+
+	res := admin.do(http.MethodPost, "/users", map[string]string{
+		"fullName": "Yader Ruiz", "username": "yader", "roleId": env.roleID("cashier"),
+	})
+	expectStatus(t, res, http.StatusCreated, "create cashier without email")
+	access := res.body["access"].(map[string]any)
+	code, _ := access["code"].(string)
+	if access["channel"] != "code" || len(code) != 9 {
+		t.Fatalf("a user without email must get a counter code: %v", access)
+	}
+	if user := res.body["user"].(map[string]any); user["pendingActivation"] != true || user["email"] != nil {
+		t.Errorf("new user must be pending and without email: %v", user)
+	}
+	id := res.body["user"].(map[string]any)["id"].(string)
+
+	expectStatus(t, admin.do(http.MethodPost, "/users/"+id+"/resend-access", map[string]string{"channel": "email"}),
+		http.StatusUnprocessableEntity, "email access for a user without email")
+
+	c := env.newClient()
+	expectStatus(t, c.login("yader", "Cualquiera2026"), http.StatusUnauthorized, "pending user cannot log in")
+
+	res = c.do(http.MethodPost, "/auth/activate", map[string]string{"username": "yader", "code": "ZZZZ-ZZZZ", "newPassword": "Caja1Turno2026"})
+	expectStatus(t, res, http.StatusBadRequest, "wrong code")
+	if res.errorCode() != "invalid_activation" {
+		t.Errorf("code = %s, want invalid_activation", res.errorCode())
+	}
+
+	typed := strings.ToLower(strings.ReplaceAll(code, "-", " "))
+	expectStatus(t, c.do(http.MethodPost, "/auth/activate", map[string]string{
+		"username": "yader", "code": typed, "newPassword": "Caja1Turno2026",
+	}), http.StatusNoContent, "activate with the code as typed")
+	expectStatus(t, c.do(http.MethodPost, "/auth/activate", map[string]string{
+		"username": "yader", "code": code, "newPassword": "Otra1Clave2026",
+	}), http.StatusBadRequest, "code is single use")
+
+	res = c.login("yader", "Caja1Turno2026")
+	expectStatus(t, res, http.StatusOK, "login after activation")
+	if res.body["user"].(map[string]any)["mustChangePassword"] != false {
+		t.Errorf("an activated user chose their password and must not be forced to change it")
+	}
 }
 
 func TestFirstLoginForcesPasswordChange(t *testing.T) {
@@ -484,7 +532,7 @@ func TestDeactivationAndAdminSafeguards(t *testing.T) {
 		http.StatusOK, "deactivate cashier")
 	expectStatus(t, cashier.do(http.MethodGet, "/auth/me", nil), http.StatusUnauthorized, "deactivated user loses access at once")
 
-	res = admin.do(http.MethodPost, "/users/"+cashierID+"/resend-access", nil)
+	res = admin.do(http.MethodPost, "/users/"+cashierID+"/resend-access", map[string]string{"channel": "code"})
 	expectStatus(t, res, http.StatusConflict, "resend access to an inactive user")
 
 	expectStatus(t, admin.do(http.MethodGet, "/users/not-a-uuid", nil), http.StatusNotFound, "malformed id")
@@ -507,7 +555,7 @@ func TestMailWorkerDeliversAndClearsBody(t *testing.T) {
 	if err := worker.ProcessBatch(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if len(sender.sent) != 1 || sender.sent[0].To != "marvin@elbarril.ni" || sender.sent[0].Subject != "Tu acceso a Licorería" {
+	if len(sender.sent) != 1 || sender.sent[0].To != "marvin@elbarril.ni" || sender.sent[0].Subject != "Te invitaron a Licorería" {
 		t.Fatalf("unexpected deliveries: %+v", sender.sent)
 	}
 

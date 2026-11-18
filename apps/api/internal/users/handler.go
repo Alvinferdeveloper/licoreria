@@ -32,7 +32,7 @@ func (h *Handler) Routes(r chi.Router) {
 
 type userRequest struct {
 	FullName string `json:"fullName" validate:"required,min=3,max=120"`
-	Email    string `json:"email" validate:"required,email,max=254"`
+	Email    string `json:"email" validate:"omitempty,email,max=254"`
 	Username string `json:"username" validate:"required,username"`
 	RoleID   string `json:"roleId" validate:"required,uuid"`
 }
@@ -102,12 +102,18 @@ func (h *Handler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	actor, _ := auth.FromContext(r.Context())
-	user, err := h.svc.Create(r.Context(), actor.UserID, req.input())
+	user, access, err := h.svc.Create(r.Context(), actor.UserID, req.input())
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}
-	httpx.JSON(w, r, http.StatusCreated, user)
+	w.Header().Set("Cache-Control", "no-store")
+	httpx.JSON(w, r, http.StatusCreated, createResponse{User: user, Access: access})
+}
+
+type createResponse struct {
+	User   User   `json:"user"`
+	Access Access `json:"access"`
 }
 
 func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
@@ -154,16 +160,27 @@ func (h *Handler) setStatus(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, r, http.StatusOK, user)
 }
 
+type resendRequest struct {
+	Channel string `json:"channel" validate:"required,oneof=email code"`
+}
+
 func (h *Handler) resendAccess(w http.ResponseWriter, r *http.Request) {
 	id, err := httpx.URLParamUUID(r, "id")
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}
-	actor, _ := auth.FromContext(r.Context())
-	if err := h.svc.ResendAccess(r.Context(), actor.UserID, id); err != nil {
+	var req resendRequest
+	if err := httpx.Bind(w, r, &req); err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}
-	httpx.NoContent(w)
+	actor, _ := auth.FromContext(r.Context())
+	access, err := h.svc.ResendAccess(r.Context(), actor.UserID, id, req.Channel)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	w.Header().Set("Cache-Control", "no-store")
+	httpx.JSON(w, r, http.StatusOK, access)
 }

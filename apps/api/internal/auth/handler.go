@@ -39,6 +39,7 @@ func (h *Handler) Routes(r chi.Router) {
 			r.Post("/login", h.login)
 			r.Post("/forgot-password", h.forgotPassword)
 			r.Post("/reset-password", h.resetPassword)
+			r.Post("/activate", h.activate)
 		})
 		r.Post("/refresh", h.refresh)
 		r.Post("/logout", h.logout)
@@ -170,6 +171,30 @@ func (h *Handler) resetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.svc.ResetPassword(r.Context(), req.Token, req.NewPassword); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	httpx.NoContent(w)
+}
+
+// activateRequest takes the emailed token, or the username plus the code shown at the counter.
+type activateRequest struct {
+	Token       string `json:"token" validate:"required_without=Code,max=128"`
+	Username    string `json:"username" validate:"required_with=Code,max=254"`
+	Code        string `json:"code" validate:"required_without=Token,max=16"`
+	NewPassword string `json:"newPassword" validate:"required"`
+}
+
+func (h *Handler) activate(w http.ResponseWriter, r *http.Request) {
+	var req activateRequest
+	if err := httpx.Bind(w, r, &req); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	err := h.svc.Activate(r.Context(), ActivationInput{
+		Token: req.Token, Username: req.Username, Code: req.Code, NewPassword: req.NewPassword,
+	})
+	if err != nil {
 		httpx.Fail(w, r, err)
 		return
 	}

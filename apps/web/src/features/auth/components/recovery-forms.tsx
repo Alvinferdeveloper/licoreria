@@ -3,10 +3,10 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import Link from "next/link";
 import { useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { Alert } from "@/components/ui/alert";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Field, Input, PasswordInput } from "@/components/ui/field";
+import { Field, Input } from "@/components/ui/field";
 import { applyApiError } from "@/lib/api/form-errors";
 import { authApi } from "../api";
 import { authCopy } from "../copy";
@@ -16,7 +16,7 @@ import {
   type ForgotPasswordValues,
   type ResetPasswordValues,
 } from "../schemas";
-import { PasswordRules } from "./password-rules";
+import { NewPasswordFields } from "./new-password-fields";
 
 const linkClass = "text-label font-medium text-amber-ink hover:underline";
 
@@ -50,11 +50,17 @@ export function ForgotPasswordForm() {
     <form onSubmit={onSubmit} noValidate className="space-y-5">
       {formError && <Alert>{formError}</Alert>}
       <Field label={authCopy.forgot.email} error={errors.email?.message}>
-        <Input type="email" autoComplete="email" autoFocus {...form.register("email")} />
+        <Input type="email" autoComplete="email" autoFocus placeholder={authCopy.forgot.emailPlaceholder} {...form.register("email")} />
       </Field>
       <Button type="submit" variant="primary" size="lg" className="w-full" loading={isSubmitting}>
         {authCopy.forgot.submit}
       </Button>
+      <p className="text-caption text-ink-muted">
+        {authCopy.forgot.noEmail}{" "}
+        <Link href="/activar" className="font-medium text-amber-ink hover:underline">
+          {authCopy.forgot.activate}
+        </Link>
+      </p>
       <Link href="/login" className={`${linkClass} block`}>
         {authCopy.forgot.back}
       </Link>
@@ -69,8 +75,7 @@ export function ResetPasswordForm({ token }: { token: string | null }) {
     resolver: zodResolver(resetPasswordSchema),
     defaultValues: { newPassword: "", confirmPassword: "" },
   });
-  const { errors, isSubmitting } = form.formState;
-  const newPassword = useWatch({ control: form.control, name: "newPassword" });
+  const { isSubmitting } = form.formState;
 
   if (!token) {
     return (
@@ -114,15 +119,7 @@ export function ResetPasswordForm({ token }: { token: string | null }) {
           </Link>
         </Alert>
       )}
-      <div>
-        <Field label={authCopy.changePassword.next} error={errors.newPassword?.message}>
-          <PasswordInput autoComplete="new-password" autoFocus {...form.register("newPassword")} />
-        </Field>
-        <PasswordRules value={newPassword} />
-      </div>
-      <Field label={authCopy.changePassword.confirm} error={errors.confirmPassword?.message}>
-        <PasswordInput autoComplete="new-password" {...form.register("confirmPassword")} />
-      </Field>
+      <NewPasswordFields form={form} autoFocus />
       <Button type="submit" variant="primary" size="lg" className="w-full" loading={isSubmitting}>
         {authCopy.reset.submit}
       </Button>

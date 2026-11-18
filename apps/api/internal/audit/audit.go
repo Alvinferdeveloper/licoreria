@@ -20,6 +20,7 @@ const (
 	ActionLogout            = "auth.logout"
 	ActionPasswordChanged   = "auth.password_changed"
 	ActionPasswordReset     = "auth.password_reset"
+	ActionAccountActivated  = "auth.account_activated"
 	ActionTokenReuse        = "auth.refresh_token_reused"
 	ActionUserCreated       = "users.created"
 	ActionUserUpdated       = "users.updated"

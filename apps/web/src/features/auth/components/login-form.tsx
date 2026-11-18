@@ -54,6 +54,12 @@ export function LoginForm() {
       <Button type="submit" variant="primary" size="lg" className="w-full" loading={isSubmitting}>
         {copy.submit}
       </Button>
+      <p className="text-label text-ink-muted">
+        {copy.hasCode}{" "}
+        <Link href="/activar" className="font-medium text-amber-ink hover:underline">
+          {copy.activate}
+        </Link>
+      </p>
     </form>
   );
 }

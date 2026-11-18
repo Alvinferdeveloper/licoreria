@@ -4,11 +4,12 @@ import type { Role } from "@/features/auth/api";
 export interface User {
   id: string;
   fullName: string;
-  email: string;
+  email: string | null;
   username: string;
   role: Role;
   active: boolean;
   mustChangePassword: boolean;
+  pendingActivation: boolean;
   lastLoginAt: string | null;
   createdAt: string;
 }
@@ -18,6 +19,15 @@ export interface UserInput {
   email: string;
   username: string;
   roleId: string;
+}
+
+export type AccessChannel = "email" | "code";
+
+/** How the user gets in: an emailed link, or a code shown once to hand over in person. */
+export interface Access {
+  channel: AccessChannel;
+  code?: string;
+  expiresAt: string;
 }
 
 export interface UserFilters {
@@ -38,8 +48,9 @@ export const usersApi = {
     if (active !== "all") params.set("active", active);
     return api<Page<User>>("GET", `/users?${params}`);
   },
-  create: (input: UserInput) => api<User>("POST", "/users", { body: input }),
+  create: (input: UserInput) => api<{ user: User; access: Access }>("POST", "/users", { body: input }),
   update: (id: string, input: UserInput) => api<User>("PUT", `/users/${id}`, { body: input }),
   setActive: (id: string, active: boolean) => api<User>("PATCH", `/users/${id}/status`, { body: { active } }),
-  resendAccess: (id: string) => api<void>("POST", `/users/${id}/resend-access`),
+  resendAccess: (id: string, channel: AccessChannel) =>
+    api<Access>("POST", `/users/${id}/resend-access`, { body: { channel } }),
 };

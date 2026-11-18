@@ -34,6 +34,8 @@ export const authApi = {
     api<{ message: string }>("POST", "/auth/forgot-password", { body: { email }, skipRefresh: true }),
   resetPassword: (token: string, newPassword: string) =>
     api<void>("POST", "/auth/reset-password", { body: { token, newPassword }, skipRefresh: true }),
+  activate: (input: { token: string } | { username: string; code: string }, newPassword: string) =>
+    api<void>("POST", "/auth/activate", { body: { ...input, newPassword }, skipRefresh: true }),
 };
 
 export const can = (user: SessionUser | null, permission: string) =>

@@ -7,6 +7,7 @@ import { can } from "../api";
 import { authCopy } from "../copy";
 import { homePath, safeNext } from "../navigation";
 import { useSession } from "../session-store";
+import { ActivationForm } from "./activation-form";
 import { AuthFrame } from "./auth-frame";
 import { ChangePasswordForm } from "./change-password-form";
 import { LoginForm } from "./login-form";
@@ -37,6 +38,15 @@ export function ResetPasswordScreen() {
   return (
     <AuthFrame title={authCopy.reset.title} intro={authCopy.reset.intro}>
       <ResetPasswordForm token={token} />
+    </AuthFrame>
+  );
+}
+
+export function ActivationScreen() {
+  const token = useSearchParams().get("token");
+  return (
+    <AuthFrame title={authCopy.activate.title} intro={token ? authCopy.activate.introToken : authCopy.activate.introCode}>
+      <ActivationForm token={token} />
     </AuthFrame>
   );
 }

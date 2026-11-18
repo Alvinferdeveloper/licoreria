@@ -129,6 +129,18 @@ paths:
       responses:
         '204': { description: Contraseña restablecida }
         default: { $ref: '#/components/responses/Error' }
+  /auth/activate:
+    post:
+      tags: [Autenticación]
+      summary: Activar la cuenta y elegir la contraseña
+      description: Con el `token` del enlace de invitación, o con `username` y el `code` entregado en el mostrador. Los códigos equivocados cuentan para el bloqueo de la cuenta.
+      security: []
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: '#/components/schemas/ActivateRequest' } } }
+      responses:
+        '204': { description: Cuenta activada }
+        default: { $ref: '#/components/responses/Error' }
   /users:
     get:
       tags: [Usuarios y roles]
@@ -148,12 +160,18 @@ paths:
     post:
       tags: [Usuarios y roles]
       summary: Crear un usuario
-      description: 'Permiso: `users:create`. Envía por correo una contraseña temporal que debe cambiar al entrar.'
+      description: 'Permiso: `users:create`. El usuario queda pendiente hasta activarse: si tiene correo recibe un enlace de invitación; si no, la respuesta trae un código de un solo uso para entregarle en el mostrador.'
       requestBody:
         required: true
         content: { application/json: { schema: { $ref: '#/components/schemas/UserInput' } } }
       responses:
-        '201': { $ref: '#/components/responses/User' }
+        '201':
+          description: Usuario creado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties: { user: { $ref: '#/components/schemas/User' }, access: { $ref: '#/components/schemas/Access' } }
         default: { $ref: '#/components/responses/Error' }
   /users/{id}:
     parameters:
@@ -191,10 +209,20 @@ paths:
       - { $ref: '#/components/parameters/Id' }
     post:
       tags: [Usuarios y roles]
-      summary: Reenviar el acceso con una contraseña temporal nueva
-      description: 'Permiso: `users:update`.'
+      summary: Enviar un acceso nuevo (enlace por correo o código de mostrador)
+      description: 'Permiso: `users:update`. Reemplaza enlaces o códigos anteriores y quita el bloqueo por intentos. La contraseña actual sigue sirviendo hasta que se use el acceso nuevo.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [channel]
+              properties: { channel: { type: string, enum: [email, code] } }
       responses:
-        '204': { description: Correo encolado }
+        '200':
+          description: Acceso emitido
+          content: { application/json: { schema: { $ref: '#/components/schemas/Access' } } }
         default: { $ref: '#/components/responses/Error' }
   /roles:
     get:
@@ -1171,6 +1199,20 @@ components:
       type: object
       required: [token, newPassword]
       properties: { token: { type: string }, newPassword: { type: string, format: password } }
+    ActivateRequest:
+      type: object
+      required: [newPassword]
+      properties:
+        token: { type: string, description: Token del enlace de invitación }
+        username: { type: string, description: Obligatorio junto con code }
+        code: { type: string, example: ABCD-EFGH, description: Código de mostrador; acepta minúsculas, espacios o sin guion }
+        newPassword: { type: string, format: password }
+    Access:
+      type: object
+      properties:
+        channel: { type: string, enum: [email, code] }
+        code: { type: string, example: ABCD-EFGH, description: Solo en el canal code; se muestra una única vez }
+        expiresAt: { type: string, format: date-time }
     Principal:
       type: object
       properties:
@@ -1189,10 +1231,10 @@ components:
         user: { $ref: '#/components/schemas/Principal' }
     UserInput:
       type: object
-      required: [fullName, email, username, roleId]
+      required: [fullName, username, roleId]
       properties:
         fullName: { type: string, minLength: 3, maxLength: 120 }
-        email: { type: string, format: email, maxLength: 254 }
+        email: { type: string, format: email, maxLength: 254, description: Opcional; sin correo el acceso es por código de mostrador }
         username: { type: string }
         roleId: { type: string, format: uuid }
     User:
@@ -1200,11 +1242,12 @@ components:
       properties:
         id: { type: string, format: uuid }
         fullName: { type: string }
-        email: { type: string, format: email }
+        email: { type: [string, 'null'], format: email }
         username: { type: string }
         role: { type: object, properties: { id: { type: string, format: uuid }, code: { type: [string, 'null'] }, name: { type: string } } }
         active: { type: boolean }
         mustChangePassword: { type: boolean }
+        pendingActivation: { type: boolean, description: Todavía no eligió su contraseña }
         lastLoginAt: { type: [string, 'null'], format: date-time }
         createdAt: { type: string, format: date-time }
     UserPage:

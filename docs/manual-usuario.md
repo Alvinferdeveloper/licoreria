@@ -12,8 +12,11 @@ Añejo es el sistema de punto de venta, inventario y facturación de la licorer�
 ## 1. Entrar al sistema
 
 1. Escribe tu usuario o correo y tu contraseña.
-2. La primera vez, entra con la contraseña temporal que llegó a tu correo. El sistema te pedirá cambiarla antes de continuar.
-3. Si la olvidaste, usa **¿Olvidaste tu contraseña?** y sigue el enlace del correo.
+2. La primera vez, activa tu cuenta eligiendo tu propia contraseña:
+   - **Con correo:** abre el enlace de la invitación que te llegó y elige tu contraseña.
+   - **Sin correo:** el administrador te entrega un código de acceso. En la pantalla de inicio toca **Activa tu cuenta**, escribe tu usuario, el código y tu contraseña nueva.
+   El enlace y el código sirven una sola vez y vencen en 72 horas.
+3. Si la olvidaste y tienes correo, usa **¿La olvidaste?** y sigue el enlace del correo. Si no tienes correo, pide al administrador un código de acceso nuevo.
 
 Tras varios intentos fallidos la cuenta se bloquea unos minutos. La sesión se cierra sola si queda inactiva.
 
@@ -110,7 +113,7 @@ En **Personas** se administran clientes y proveedores. Consumidor final es el cl
 
 ## 10. Usuarios y roles (Administrador)
 
-- **Personas > Usuarios:** al crear un usuario, le llega un correo con su contraseña temporal. Desde ahí también se reenvía el acceso y se desactiva una cuenta.
+- **Personas > Usuarios:** al crear un usuario con correo, le llega una invitación para elegir su contraseña; sin correo, el sistema muestra una sola vez un código de acceso para entregárselo en persona. Mientras no la elija, aparece como **Invitación pendiente**. Desde la fila se reenvía la invitación (avión de papel), se genera un código nuevo (llave), útil también si alguien sin correo olvida su contraseña, y se desactiva una cuenta.
 - **Sistema > Roles y permisos:** marca qué puede hacer cada rol. El cambio aplica de inmediato.
 - **PIN de autorización:** quien autoriza descuentos o anulaciones define su PIN en **Cambiar contraseña**, debajo de su nombre.
 

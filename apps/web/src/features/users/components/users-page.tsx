@@ -1,6 +1,6 @@
 "use client";
 
-import { PaperPlaneTilt, PencilSimple, Plus } from "@phosphor-icons/react";
+import { Key, PaperPlaneTilt, PencilSimple, Plus } from "@phosphor-icons/react";
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useDeferredValue, useState } from "react";
 import { DataTable, RowActions, type Column } from "@/components/data/data-table";
@@ -13,8 +13,9 @@ import { can } from "@/features/auth/api";
 import { useSession } from "@/features/auth/session-store";
 import { rolesApi, rolesKeys } from "@/features/roles/api";
 import { formatDateTime, formatRelative } from "@/lib/format/date";
-import { usersApi, usersKeys, type User, type UserFilters, type UserInput } from "../api";
+import { usersApi, usersKeys, type Access, type AccessChannel, type User, type UserFilters, type UserInput } from "../api";
 import { usersCopy as copy } from "../copy";
+import { AccessCodeSheet } from "./access-code-sheet";
 import { UserSheet } from "./user-sheet";
 
 export function UsersPage() {
@@ -24,6 +25,7 @@ export function UsersPage() {
   const [active, setActive] = useState<StatusFilter>("all");
   const [page, setPage] = useState(1);
   const [sheet, setSheet] = useState<{ open: boolean; user: User | null }>({ open: false, user: null });
+  const [grant, setGrant] = useState<{ user: User; access: Access } | null>(null);
   const { notice, success, failure } = useNotice();
 
   const filters: UserFilters = { search: useDeferredValue(search), active, page };
@@ -39,19 +41,30 @@ export function UsersPage() {
     },
     onError: failure,
   });
-  const resendMutation = useMutation({
-    mutationFn: (user: User) => usersApi.resendAccess(user.id),
-    onSuccess: (_, user) => success(copy.notices.resent(user.email)),
+  const showAccess = (user: User, access: Access, notice: (email: string) => string) => {
+    if (access.channel === "code") setGrant({ user, access });
+    else success(notice(user.email ?? ""));
+  };
+  const accessMutation = useMutation({
+    mutationFn: ({ user, channel }: { user: User; channel: AccessChannel }) => usersApi.resendAccess(user.id, channel),
+    onSuccess: (access, { user }) => showAccess(user, access, copy.notices.resent),
     onError: failure,
   });
 
   const saveUser = async (input: UserInput) => {
     const editing = sheet.user;
-    const saved = editing ? await usersApi.update(editing.id, input) : await usersApi.create(input);
+    if (editing) {
+      await usersApi.update(editing.id, input);
+      success(copy.notices.updated);
+    } else {
+      const { user, access } = await usersApi.create(input);
+      showAccess(user, access, copy.notices.invited);
+    }
     setSheet({ open: false, user: null });
-    success(editing ? copy.notices.updated : copy.notices.created(saved.email));
     await refresh();
   };
+  const accessPending = (user: User, channel: AccessChannel) =>
+    accessMutation.isPending && accessMutation.variables?.user.id === user.id && accessMutation.variables.channel === channel;
 
   const canUpdate = can(me, "users:update");
   const canToggle = can(me, "users:delete");
@@ -66,7 +79,7 @@ export function UsersPage() {
             {user.fullName}
             {user.id === me?.id && <span className="ml-2 text-caption font-normal text-ink-subtle">{copy.you}</span>}
           </p>
-          <p className="text-caption text-ink-muted">{user.email}</p>
+          <p className="text-caption text-ink-muted">{user.email ?? copy.noEmail}</p>
         </>
       ),
     },
@@ -96,16 +109,28 @@ export function UsersPage() {
               <PencilSimple size={16} />
             </Button>
           )}
-          {canUpdate && user.active && (
+          {canUpdate && user.active && user.email && user.pendingActivation && (
             <Button
               variant="ghost"
               size="icon-sm"
-              aria-label={`${copy.actions.resend} a ${user.fullName}`}
-              title={copy.actions.resend}
-              loading={resendMutation.isPending && resendMutation.variables?.id === user.id}
-              onClick={() => resendMutation.mutate(user)}
+              aria-label={`${copy.actions.resendInvite}: ${user.fullName}`}
+              title={copy.actions.resendInvite}
+              loading={accessPending(user, "email")}
+              onClick={() => accessMutation.mutate({ user, channel: "email" })}
             >
               <PaperPlaneTilt size={16} />
+            </Button>
+          )}
+          {canUpdate && user.active && user.id !== me?.id && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`${copy.actions.code}: ${user.fullName}`}
+              title={copy.actions.code}
+              loading={accessPending(user, "code")}
+              onClick={() => accessMutation.mutate({ user, channel: "code" })}
+            >
+              <Key size={16} />
             </Button>
           )}
           {canToggle && user.id !== me?.id && (user.active ? (
@@ -155,12 +180,14 @@ export function UsersPage() {
         <Pagination meta={users.data?.meta} onPage={setPage} />
       </div>
       <UserSheet open={sheet.open} user={sheet.user} roles={roles.data ?? []} onClose={() => setSheet({ open: false, user: null })} onSubmit={saveUser} />
+      <AccessCodeSheet grant={grant} onClose={() => setGrant(null)} />
     </>
   );
 }
 
 function StatusBadge({ user }: { user: User }) {
   if (!user.active) return <Badge>{copy.status.inactive}</Badge>;
+  if (user.pendingActivation) return <Badge tone="warning">{copy.status.pending}</Badge>;
   if (user.mustChangePassword) return <Badge tone="warning">{copy.status.temporary}</Badge>;
   return <Badge tone="success">{copy.status.active}</Badge>;
 }
