@@ -10,6 +10,7 @@ import { cn } from "@/lib/cn";
 import { CURRENCIES, formatRate, nioToUsd, parseAmount, toCents, type CurrencyCode } from "@/lib/money";
 import { posCopy } from "../copy";
 import { amountDue, BILL_SHORTCUTS, paymentInBase, type PaymentMethod } from "../domain";
+import { useConnectivity } from "../offline/connectivity";
 import { usePosStore } from "../store/pos-store";
 import { useTenderSummary } from "../store/selectors";
 import { AuthorizationForm } from "./authorization-form";
@@ -38,8 +39,11 @@ export function TenderView() {
   const needsAuthorization = usePosStore((state) => state.needsAuthorization);
   const tender = useTenderSummary();
 
+  const online = useConnectivity((s) => s.online);
   const [currency, setCurrency] = useState<CurrencyCode>("NIO");
-  const [method, setMethod] = useState<PaymentMethod>("cash");
+  const [chosenMethod, setMethod] = useState<PaymentMethod>("cash");
+  // Cards and transfers need the network; offline only cash is taken.
+  const method: PaymentMethod = online ? chosenMethod : "cash";
   const [amountInput, setAmountInput] = useState("");
 
   const due = amountDue(tender.remaining, currency, rate);
@@ -102,7 +106,11 @@ export function TenderView() {
         {!tender.isCovered && (
           <form onSubmit={onSubmit} className="space-y-3">
             <SegmentedControl label={posCopy.tender.currency} value={currency} options={CURRENCY_OPTIONS} onChange={setCurrency} />
-            <SegmentedControl label={posCopy.tender.method} value={method} options={METHOD_OPTIONS} onChange={setMethod} />
+            {online ? (
+              <SegmentedControl label={posCopy.tender.method} value={method} options={METHOD_OPTIONS} onChange={setMethod} />
+            ) : (
+              <p className="rounded-md bg-amber-tint px-3 py-2 text-label text-amber-ink">{posCopy.offline.cashOnly}</p>
+            )}
 
             <div className="space-y-1.5">
               <label htmlFor={TENDER_INPUT_ID} className="text-label font-medium">

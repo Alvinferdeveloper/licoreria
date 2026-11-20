@@ -46,6 +46,7 @@ export interface Sale {
   voidReason: string | null;
   voidedAt: string | null;
   createdAt: string;
+  offlineAt: string | null;
   items?: SaleItem[];
   payments?: SalePayment[];
 }
@@ -63,6 +64,8 @@ export interface SaleInput {
   authorization: Authorization | null;
   lines: { productId: string; presentationId: string | null; quantity: number }[];
   payments: { method: SalePayment["method"]; currency: SalePayment["currency"]; amount: string; reference: string | null }[];
+  /** Set when the POS made the sale without connection: when it really happened. */
+  offlineAt?: string;
 }
 
 export interface SaleFilters {
@@ -89,7 +92,8 @@ export const salesKeys = {
 
 export const salesApi = {
   /** The key makes retries safe: the API returns the first sale instead of charging twice. */
-  create: (key: string, input: SaleInput) => api<Sale>("POST", "/sales", { body: input, headers: { "Idempotency-Key": key } }),
+  create: (key: string, input: SaleInput) =>
+    api<Sale>("POST", "/sales", { body: input, headers: { "Idempotency-Key": key }, timeoutMs: 15_000 }),
   list: (f: SaleFilters) => {
     const params = new URLSearchParams({ page: String(f.page), pageSize: "20" });
     if (f.search.trim()) params.set("search", f.search.trim());

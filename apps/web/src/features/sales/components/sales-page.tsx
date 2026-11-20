@@ -109,6 +109,7 @@ function SaleDetail({ sale, onVoided }: { sale: Sale; onVoided: (s: Sale) => voi
       <p className="text-label text-ink-muted">
         {d.meta(sale.register.name, sale.cashier.name, formatDateTime(sale.createdAt))} · {sale.customer.name}
       </p>
+      {sale.offlineAt && <p className="text-caption text-amber-ink">{d.offline(formatDateTime(sale.offlineAt))}</p>}
       {sale.status === "voided" && sale.voidedAt && <Alert>{d.voided(formatDateTime(sale.voidedAt), sale.voidReason ?? "")}</Alert>}
 
       <section className="space-y-2">

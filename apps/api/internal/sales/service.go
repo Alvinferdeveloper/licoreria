@@ -32,7 +32,12 @@ var (
 	ErrAlreadyVoided      = apperr.New(apperr.KindConflict, "sale_voided", "La venta ya está anulada.")
 	ErrShiftClosed        = apperr.New(apperr.KindConflict, "sale_shift_closed", "El turno de esa venta ya cerró y ya no se puede anular.")
 	ErrKeyReused          = apperr.New(apperr.KindConflict, "idempotency_key_reused", "Esa clave de venta ya fue usada por otro usuario.")
+	ErrOfflineTooOld      = apperr.Validation(apperr.FieldError{Field: "offlineAt", Code: "range",
+		Message: "Esta venta sin conexión tiene fecha futura o de hace más de 48 horas, y ya no se puede registrar."})
 )
+
+// maxOfflineAge bounds how late a sale made without connection may still be recorded.
+const maxOfflineAge = 48 * time.Hour
 
 type LineInput struct {
 	ProductID      uuid.UUID
@@ -52,17 +57,29 @@ type Input struct {
 	Authorization *Authorization
 	Lines         []LineInput
 	Payments      []PaymentInput
+	// OfflineAt is when the POS made the sale without connection; the schedule and the
+	// exchange rate are those of that moment, and stock may go negative.
+	OfflineAt *time.Time
+}
+
+// rateFor returns the rate the sale must use: today's, or that of the offline sale's day.
+func rateFor(ctx context.Context, db database.DBTX, in Input) (rates.Rate, error) {
+	if in.OfflineAt == nil {
+		return rates.Today(ctx, db)
+	}
+	return rates.On(ctx, db, in.OfflineAt.In(schedule.Zone).Format("2006-01-02"))
 }
 
 type Service struct {
-	pool   *pgxpool.Pool
-	ledger *inventory.Ledger
-	repo   repository
-	logos  pdfx.ImageCache
+	pool       *pgxpool.Pool
+	ledger     *inventory.Ledger
+	repo       repository
+	logos      pdfx.ImageCache
+	appBaseURL string
 }
 
-func NewService(pool *pgxpool.Pool, ledger *inventory.Ledger) *Service {
-	return &Service{pool: pool, ledger: ledger}
+func NewService(pool *pgxpool.Pool, ledger *inventory.Ledger, appBaseURL string) *Service {
+	return &Service{pool: pool, ledger: ledger, appBaseURL: appBaseURL}
 }
 
 // seesAll: supervisors and read-only roles see every sale; cashiers only their own.
@@ -168,7 +185,15 @@ func (s *Service) Create(ctx context.Context, actor auth.Principal, key uuid.UUI
 	if !in.AgeVerified {
 		return Sale{}, false, ErrAgeNotVerified
 	}
-	if hours, err := schedule.Evaluate(ctx, s.pool, actor.UserID, time.Now()); err != nil {
+	now := time.Now()
+	at := now
+	if in.OfflineAt != nil {
+		if in.OfflineAt.After(now.Add(5*time.Minute)) || in.OfflineAt.Before(now.Add(-maxOfflineAge)) {
+			return Sale{}, false, ErrOfflineTooOld
+		}
+		at = *in.OfflineAt
+	}
+	if hours, err := schedule.Evaluate(ctx, s.pool, actor.UserID, at); err != nil {
 		return Sale{}, false, err
 	} else if hours.Blocked(actor.Can("schedule", "authorize")) {
 		return Sale{}, false, schedule.ErrSalesClosed
@@ -177,7 +202,7 @@ func (s *Service) Create(ctx context.Context, actor auth.Principal, key uuid.UUI
 	if _, _, err := cash.OpenShiftFor(ctx, s.pool, actor.UserID); err != nil {
 		return Sale{}, false, err
 	}
-	if _, err := rates.Today(ctx, s.pool); err != nil {
+	if _, err := rateFor(ctx, s.pool, in); err != nil {
 		return Sale{}, false, err
 	}
 
@@ -187,12 +212,13 @@ func (s *Service) Create(ctx context.Context, actor auth.Principal, key uuid.UUI
 	}
 
 	var sale Sale
+	var negative []string
 	err = database.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
 		shiftID, registerID, err := cash.OpenShiftFor(ctx, tx, actor.UserID)
 		if err != nil {
 			return err
 		}
-		rate, err := rates.Today(ctx, tx)
+		rate, err := rateFor(ctx, tx, in)
 		if err != nil {
 			return err
 		}
@@ -223,6 +249,7 @@ func (s *Service) Create(ctx context.Context, actor auth.Principal, key uuid.UUI
 		saleID, err := s.repo.insertSale(ctx, tx, saleRow{
 			Series: series, Number: number, ShiftID: shiftID, RegisterID: registerID, UserID: actor.UserID, Customer: customer,
 			Totals: t, Rate: rate.Rate, Change: change, AuthorizedBy: authorizedBy, IdempotencyKey: key, Notes: strings.TrimSpace(in.Notes),
+			OfflineAt: in.OfflineAt,
 		})
 		if err != nil {
 			return err
@@ -237,16 +264,33 @@ func (s *Service) Create(ctx context.Context, actor auth.Principal, key uuid.UUI
 				return err
 			}
 		}
-		if err := s.moveStock(ctx, tx, actor.UserID, saleID, lines, -1, inventory.TypeSale, "Venta "+fmt.Sprintf("%s-%06d", series, number)); err != nil {
+		negative, err = s.moveStock(ctx, tx, actor.UserID, saleID, lines, -1, inventory.TypeSale, "Venta "+fmt.Sprintf("%s-%06d", series, number), in.OfflineAt != nil)
+		if err != nil {
 			return err
 		}
 		if sale, err = s.repo.get(ctx, tx, saleID, false); err != nil {
 			return err
 		}
 		return audit.Record(ctx, tx, audit.Entry{UserID: &actor.UserID, Action: "sales.created", Entity: "sales", EntityID: &saleID,
-			After: map[string]any{"invoice": sale.Invoice, "total": sale.Total, "discount": sale.Discount, "authorizedBy": authorizedBy}})
+			After: map[string]any{"invoice": sale.Invoice, "total": sale.Total, "discount": sale.Discount, "authorizedBy": authorizedBy, "offlineAt": in.OfflineAt}})
 	})
+	if err == nil && len(negative) > 0 {
+		s.alertNegativeStock(ctx, sale, negative)
+	}
 	return sale, err == nil, err
+}
+
+// alertNegativeStock tells the administrators that an offline sale sold more than the stock on record.
+func (s *Service) alertNegativeStock(ctx context.Context, sale Sale, products []string) {
+	err := mail.AlertAdmins(ctx, s.pool, mail.Alert{
+		Subject: "Venta sin conexión dejó stock negativo",
+		Body: fmt.Sprintf("La factura %s se hizo sin conexión y vendió más de lo que había en el sistema: %s. Revisa el conteo o registra la compra pendiente.",
+			sale.Invoice, strings.Join(products, "; ")),
+		ActionURL: s.appBaseURL + "/inventario", ActionLabel: "Ver existencias", When: time.Now(),
+	})
+	if err != nil {
+		logx.From(ctx).Error("queue negative stock alert", "sale_id", sale.ID, "error", err)
+	}
 }
 
 // authorizeDiscount requires an administrator PIN when the discount passes the role limit.
@@ -307,23 +351,30 @@ func (s *Service) priceLines(ctx context.Context, db database.DBTX, in []LineInp
 }
 
 // moveStock applies one ledger movement per product, adding up its unit and pack lines.
-func (s *Service) moveStock(ctx context.Context, tx pgx.Tx, userID, saleID uuid.UUID, lines []pricedLine, sign int, kind, reason string) error {
+// With allowNegative it returns the products left below zero, as "name (stock)".
+func (s *Service) moveStock(ctx context.Context, tx pgx.Tx, userID, saleID uuid.UUID, lines []pricedLine, sign int, kind, reason string, allowNegative bool) ([]string, error) {
 	units := map[uuid.UUID]int{}
+	names := map[uuid.UUID]string{}
 	var order []uuid.UUID
 	for _, l := range lines {
 		if _, seen := units[l.ProductID]; !seen {
 			order = append(order, l.ProductID)
 		}
 		units[l.ProductID] += l.Quantity * l.UnitsPerItem
+		names[l.ProductID] = l.Name
 	}
+	var negative []string
 	for _, productID := range order {
-		_, err := s.ledger.Apply(ctx, tx, inventory.Movement{ProductID: productID, Type: kind, Quantity: sign * units[productID],
-			Reason: reason, SourceType: "sale", SourceID: &saleID, UserID: userID})
+		after, err := s.ledger.Apply(ctx, tx, inventory.Movement{ProductID: productID, Type: kind, Quantity: sign * units[productID],
+			Reason: reason, SourceType: "sale", SourceID: &saleID, UserID: userID, AllowNegative: allowNegative})
 		if err != nil {
-			return err
+			return nil, err
+		}
+		if allowNegative && after < 0 {
+			negative = append(negative, fmt.Sprintf("%s (%d)", names[productID], after))
 		}
 	}
-	return nil
+	return negative, nil
 }
 
 // Void cancels a sale from a still-open shift and returns its stock. Without sales:void the
@@ -361,7 +412,7 @@ func (s *Service) Void(ctx context.Context, actor auth.Principal, id uuid.UUID, 
 		for i, item := range sale.Items {
 			lines[i] = pricedLine{ProductID: item.ProductID, Quantity: item.Quantity, UnitsPerItem: item.UnitsPerItem}
 		}
-		if err := s.moveStock(ctx, tx, actor.UserID, id, lines, 1, inventory.TypeSaleVoid, "Anulación de "+sale.Invoice+": "+reason); err != nil {
+		if _, err := s.moveStock(ctx, tx, actor.UserID, id, lines, 1, inventory.TypeSaleVoid, "Anulación de "+sale.Invoice+": "+reason, false); err != nil {
 			return err
 		}
 		if err := s.repo.markVoided(ctx, tx, id, voidedBy, reason); err != nil {

@@ -60,6 +60,15 @@ Abre **Vender > Punto de venta**. Todo el flujo se puede hacer solo con teclado:
 
 **Tarjeta y transferencia** no pueden cobrar más que el saldo. Solo el efectivo genera vuelto.
 
+**Sin conexión.** Si el punto de venta pierde la conexión con el servidor, aparece una franja ámbar y puedes seguir vendiendo:
+
+- Se busca y escanea con el catálogo guardado en el equipo, que se actualiza solo cada 10 minutos mientras hay conexión.
+- Solo se cobra en efectivo, y los descuentos deben estar dentro de tu límite, porque no se puede validar el PIN de un administrador.
+- Cada venta entrega un **comprobante provisional** (código `P-…`). Al volver la conexión, las ventas se envían solas en orden y reciben su número de factura; en la píldora del encabezado ves cuántas faltan y cuál factura recibió cada una.
+- **No cierres la pestaña ni recargues la página** mientras no haya conexión: la app necesita el servidor para abrir de nuevo.
+- Si alguna venta deja el stock en negativo, se registra igual (ya ocurrió) y los administradores reciben un aviso.
+- No se puede cerrar la caja mientras haya ventas sin enviar. Las ventas sin conexión con más de 48 horas ya no se aceptan.
+
 ## 4. Anular una venta
 
 En **Vender > Ventas**, abre la venta y pulsa **Anular**, con un motivo. Sin el permiso de anular, pide el PIN de un administrador. El stock vuelve solo y la factura queda marcada como anulada.

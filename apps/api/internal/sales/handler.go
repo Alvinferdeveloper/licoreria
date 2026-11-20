@@ -3,6 +3,7 @@ package sales
 import (
 	"net/http"
 	"regexp"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -62,10 +63,11 @@ type saleRequest struct {
 	Authorization *authorizationRequest `json:"authorization"`
 	Lines         []lineRequest         `json:"lines" validate:"required,min=1,max=200,dive"`
 	Payments      []paymentRequest      `json:"payments" validate:"required,min=1,max=10,dive"`
+	OfflineAt     *time.Time            `json:"offlineAt"`
 }
 
 func (req saleRequest) input() Input {
-	in := Input{CustomerID: req.CustomerID, AgeVerified: req.AgeVerified, Notes: req.Notes}
+	in := Input{CustomerID: req.CustomerID, AgeVerified: req.AgeVerified, Notes: req.Notes, OfflineAt: req.OfflineAt}
 	if req.Discount != nil {
 		in.Discount = &Discount{Kind: req.Discount.Kind, Value: req.Discount.Value}
 	}

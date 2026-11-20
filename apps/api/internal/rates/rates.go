@@ -60,6 +60,15 @@ func Today(ctx context.Context, db database.DBTX) (Rate, error) {
 	return r, database.MapError(err, nil)
 }
 
+// On returns the rate of a store day ("2006-01-02") or ErrMissing.
+func On(ctx context.Context, db database.DBTX, day string) (Rate, error) {
+	r, err := scan(db.QueryRow(ctx, selectRate+" AND r.effective_date = $1::date", day))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return Rate{}, ErrMissing
+	}
+	return r, database.MapError(err, nil)
+}
+
 type Service struct {
 	pool *pgxpool.Pool
 }

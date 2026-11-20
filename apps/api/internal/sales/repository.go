@@ -76,6 +76,7 @@ type Sale struct {
 	VoidReason   *string    `json:"voidReason"`
 	VoidedAt     *time.Time `json:"voidedAt"`
 	CreatedAt    time.Time  `json:"createdAt"`
+	OfflineAt    *time.Time `json:"offlineAt"`
 	Items        []Item     `json:"items,omitempty"`
 	Payments     []Payment  `json:"payments,omitempty"`
 }
@@ -106,7 +107,7 @@ const selectSale = `
 	       s.customer_id, s.customer_name, s.customer_tax_id, c.email::text, s.shift_id,
 	       s.subtotal::text, s.discount::text, s.tax::text, s.total::text, s.exchange_rate::text, s.change_nio::text,
 	       (SELECT COALESCE(sum(quantity * units_per_item), 0) FROM sale_items WHERE sale_id = s.id),
-	       s.notes, s.void_reason, s.voided_at, s.created_at
+	       s.notes, s.void_reason, s.voided_at, s.created_at, s.offline_at
 	FROM sales s
 	JOIN registers r ON r.id = s.register_id
 	JOIN users u ON u.id = s.user_id
@@ -117,7 +118,7 @@ func scanSale(row pgx.Row) (Sale, error) {
 	err := row.Scan(&s.ID, &s.Series, &s.Number, &s.Status, &s.Register.ID, &s.Register.Name, &s.Cashier.ID, &s.Cashier.Name,
 		&s.Customer.ID, &s.Customer.Name, &s.Customer.TaxID, &s.Customer.Email, &s.ShiftID,
 		&s.Subtotal, &s.Discount, &s.Tax, &s.Total, &s.ExchangeRate, &s.ChangeNIO, &s.ItemCount,
-		&s.Notes, &s.VoidReason, &s.VoidedAt, &s.CreatedAt)
+		&s.Notes, &s.VoidReason, &s.VoidedAt, &s.CreatedAt, &s.OfflineAt)
 	s.Invoice = fmt.Sprintf("%s-%06d", s.Series, s.Number)
 	return s, err
 }
@@ -255,18 +256,19 @@ type saleRow struct {
 	AuthorizedBy        *uuid.UUID
 	IdempotencyKey      uuid.UUID
 	Notes               string
+	OfflineAt           *time.Time
 }
 
 func (repository) insertSale(ctx context.Context, db database.DBTX, s saleRow) (uuid.UUID, error) {
 	var id uuid.UUID
 	err := db.QueryRow(ctx, `
 		INSERT INTO sales (invoice_series, invoice_number, shift_id, register_id, user_id, customer_id, customer_name, customer_tax_id,
-		                   subtotal, discount, tax, total, exchange_rate, change_nio, age_verified, discount_authorized_by, idempotency_key, notes)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::numeric, $10::numeric, $11::numeric, $12::numeric, $13::numeric, $14::numeric, true, $15, $16, $17)
+		                   subtotal, discount, tax, total, exchange_rate, change_nio, age_verified, discount_authorized_by, idempotency_key, notes, offline_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::numeric, $10::numeric, $11::numeric, $12::numeric, $13::numeric, $14::numeric, true, $15, $16, $17, $18)
 		RETURNING id`,
 		s.Series, s.Number, s.ShiftID, s.RegisterID, s.UserID, s.Customer.ID, s.Customer.Name, s.Customer.TaxID,
 		formatCents(s.Totals.Subtotal), formatCents(s.Totals.Discount), formatCents(s.Totals.Tax), formatCents(s.Totals.Total),
-		s.Rate, formatCents(s.Change), s.AuthorizedBy, s.IdempotencyKey, s.Notes).Scan(&id)
+		s.Rate, formatCents(s.Change), s.AuthorizedBy, s.IdempotencyKey, s.Notes, s.OfflineAt).Scan(&id)
 	return id, database.MapError(err, nil)
 }
 

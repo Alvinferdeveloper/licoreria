@@ -11,6 +11,8 @@ import { posCopy } from "../copy";
 import { toPosProduct } from "../data/products";
 import { availableStock, type PosPresentation, type PosProduct } from "../domain";
 import { POS_SEARCH_INPUT_ID } from "../hooks/search-focus";
+import { findByCode, searchCatalog, useCachedCatalog } from "../offline/catalog-cache";
+import { isNetworkError, useConnectivity } from "../offline/connectivity";
 import { usePosStore } from "../store/pos-store";
 import { CategoryFilter } from "./category-filter";
 import { ProductRow } from "./product-row";
@@ -37,11 +39,32 @@ export function ProductSearch({ locked }: ProductSearchProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const deferredQuery = useDeferredValue(query);
 
-  const filters = { search: deferredQuery, categoryId: category ?? "", active: "true" as const, lowStock: false, page: 1, pageSize: 40 };
-  const search = useQuery({ queryKey: catalogKeys.productList(filters), queryFn: () => catalogApi.products(filters), placeholderData: keepPreviousData });
-  const categories = useQuery({ queryKey: catalogKeys.masters("categories"), queryFn: () => catalogApi.masters("categories") });
+  const online = useConnectivity((s) => s.online);
+  const setOnline = useConnectivity((s) => s.setOnline);
+  const cached = useCachedCatalog((s) => s.catalog);
 
-  const results = useMemo(() => (search.data?.data ?? []).map(toPosProduct), [search.data]);
+  const filters = { search: deferredQuery, categoryId: category ?? "", active: "true" as const, lowStock: false, page: 1, pageSize: 40 };
+  const search = useQuery({
+    queryKey: catalogKeys.productList(filters),
+    queryFn: () => catalogApi.products(filters),
+    placeholderData: keepPreviousData,
+    enabled: online,
+    retry: (count, error) => !isNetworkError(error) && count < 2,
+  });
+  const categories = useQuery({ queryKey: catalogKeys.masters("categories"), queryFn: () => catalogApi.masters("categories"), enabled: online });
+
+  useEffect(() => {
+    if (search.isError && isNetworkError(search.error)) setOnline(false);
+  }, [search.isError, search.error, setOnline]);
+
+  // Offline, the device's copy of the catalog answers instead of the server.
+  const localResults = useMemo(
+    () => (online || !cached ? null : searchCatalog(cached.products, deferredQuery, category)),
+    [online, cached, deferredQuery, category],
+  );
+  const results = useMemo(() => (localResults ?? search.data?.data ?? []).map(toPosProduct), [localResults, search.data]);
+  const resultTotal = localResults ? localResults.length : (search.data?.meta.total ?? 0);
+  const categoryList = online ? categories.data : cached?.categories;
   const active = results[Math.min(activeIndex, results.length - 1)];
 
   useEffect(() => {
@@ -58,7 +81,16 @@ export function ProductSearch({ locked }: ProductSearchProps) {
     }
   };
 
+  const addScannedLocally = (code: string) => {
+    const found = cached && findByCode(cached.products, code);
+    if (!found) return false;
+    const pos = toPosProduct(found.product);
+    select(pos, pos.presentations.find((p) => p.id === found.presentationId) ?? null);
+    return true;
+  };
+
   const addScanned = async (code: string) => {
+    if (!online) return addScannedLocally(code);
     try {
       const { product, presentationId } = await catalogApi.lookup(code);
       const pos = toPosProduct(product);
@@ -66,6 +98,10 @@ export function ProductSearch({ locked }: ProductSearchProps) {
       return true;
     } catch (error) {
       if (error instanceof ApiError && error.status === 404) return false;
+      if (isNetworkError(error)) {
+        setOnline(false);
+        return addScannedLocally(code);
+      }
       setNotice(error instanceof ApiError ? error.message : posCopy.search.notFound(code));
       return true;
     }
@@ -82,7 +118,10 @@ export function ProductSearch({ locked }: ProductSearchProps) {
     if (event.key !== "Enter" || !value) return;
     event.preventDefault();
     if (looksLikeCode(value) && (await addScanned(value))) return;
-    if (active && deferredQuery === query) return select(active);
+    // The list may still show the previous search while the new one loads: never add from it.
+    const stale = deferredQuery !== query || (online && (search.isPlaceholderData || search.isPending));
+    if (stale) return;
+    if (active) return select(active);
     setNotice(posCopy.search.notFound(value));
   };
 
@@ -128,7 +167,7 @@ export function ProductSearch({ locked }: ProductSearchProps) {
 
       <div className="flex items-center justify-between gap-4">
         <CategoryFilter
-          categories={(categories.data ?? []).filter((c) => c.active && c.productCount > 0)}
+          categories={(categoryList ?? []).filter((c) => c.active && c.productCount > 0)}
           value={category}
           onChange={(next) => {
             setCategory(next);
@@ -136,7 +175,7 @@ export function ProductSearch({ locked }: ProductSearchProps) {
           }}
         />
         <span className="shrink-0 text-caption text-ink-subtle" aria-live="polite">
-          {posCopy.search.resultsCount(search.data?.meta.total ?? 0)}
+          {posCopy.search.resultsCount(resultTotal)}
         </span>
       </div>
 
@@ -168,7 +207,11 @@ export function ProductSearch({ locked }: ProductSearchProps) {
             />
           ))}
         </ul>
-      ) : search.isPending ? (
+      ) : !online && !cached ? (
+        <div className="grid flex-1 place-content-center gap-1 text-center">
+          <p className="max-w-xs text-ink-muted">{posCopy.offline.noCatalog}</p>
+        </div>
+      ) : online && search.isPending ? (
         <ul className="-mx-2 space-y-0.5 px-2" aria-hidden>
           {Array.from({ length: 8 }, (_, i) => (
             <li key={i} className="flex items-center justify-between rounded-md px-3 py-3.5">
@@ -179,8 +222,8 @@ export function ProductSearch({ locked }: ProductSearchProps) {
         </ul>
       ) : (
         <div className="grid flex-1 place-content-center gap-1 text-center">
-          <p className="text-title font-semibold">{search.isError ? posCopy.search.errorTitle : posCopy.search.emptyTitle}</p>
-          <p className="max-w-xs text-ink-muted">{search.isError ? posCopy.search.errorBody : posCopy.search.emptyBody}</p>
+          <p className="text-title font-semibold">{online && search.isError ? posCopy.search.errorTitle : posCopy.search.emptyTitle}</p>
+          <p className="max-w-xs text-ink-muted">{online && search.isError ? posCopy.search.errorBody : posCopy.search.emptyBody}</p>
         </div>
       )}
     </section>

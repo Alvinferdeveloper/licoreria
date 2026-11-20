@@ -119,10 +119,10 @@ export const catalogApi = {
     if (f.categoryId) params.set("categoryId", f.categoryId);
     if (f.active !== "all") params.set("active", f.active);
     if (f.lowStock) params.set("lowStock", "true");
-    return api<Page<Product>>("GET", `/products?${params}`);
+    return api<Page<Product>>("GET", `/products?${params}`, { timeoutMs: 8_000 });
   },
   lookup: (code: string) =>
-    api<{ product: Product; presentationId: string | null }>("GET", `/products/lookup?code=${encodeURIComponent(code)}`),
+    api<{ product: Product; presentationId: string | null }>("GET", `/products/lookup?code=${encodeURIComponent(code)}`, { timeoutMs: 8_000 }),
   createProduct: (input: ProductInput) => api<Product>("POST", "/products", { body: input }),
   updateProduct: (id: string, input: ProductInput) => api<Product>("PUT", `/products/${id}`, { body: input }),
   setProductActive: (id: string, active: boolean) => api<Product>("PATCH", `/products/${id}/status`, { body: { active } }),

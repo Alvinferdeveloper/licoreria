@@ -58,6 +58,8 @@ interface RequestOptions {
   skipRefresh?: boolean;
   signal?: AbortSignal;
   headers?: Record<string, string>;
+  /** Gives up after this long and reports a lost connection, instead of hanging on a dead network. */
+  timeoutMs?: number;
 }
 
 export async function api<T>(method: Method, path: string, init: RequestOptions = {}): Promise<T> {
@@ -94,22 +96,33 @@ async function send(method: Method, path: string, init: RequestOptions, token: s
   if (init.body !== undefined) headers["Content-Type"] = "application/json";
   if (token) headers.Authorization = `Bearer ${token}`;
 
+  const timeout = init.timeoutMs ? AbortSignal.timeout(init.timeoutMs) : undefined;
+  const signal = init.signal && timeout ? AbortSignal.any([init.signal, timeout]) : (init.signal ?? timeout);
   try {
     return await fetch(`/api/v1${path}`, {
       method,
       headers,
       body: init.form ?? (init.body === undefined ? undefined : JSON.stringify(init.body)),
       credentials: "same-origin",
-      signal: init.signal,
+      signal,
     });
   } catch (error) {
+    // A caller's own abort propagates; a timeout (TimeoutError) means the network is gone.
     if (error instanceof DOMException && error.name === "AbortError") throw error;
     throw new ApiError(0, "network_error", NETWORK_ERROR_MESSAGE);
   }
 }
 
+/**
+ * The API answers every error with a JSON envelope. A 5xx without it comes from the proxy in
+ * front (the API is down or unreachable), so it counts as a lost connection.
+ */
+export const isUnreachable = (response: Response) =>
+  response.status >= 500 && !response.headers.get("content-type")?.includes("application/json");
+
 async function parse<T>(response: Response): Promise<T> {
   if (response.status === 204) return undefined as T;
+  if (isUnreachable(response)) throw new ApiError(0, "network_error", NETWORK_ERROR_MESSAGE);
 
   const data: unknown = await response.json().catch(() => null);
   if (response.ok) return data as T;

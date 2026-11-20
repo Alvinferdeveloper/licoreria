@@ -14,8 +14,10 @@ import { posCopy } from "../copy";
 import { usePosSession, type PosBlocker, type PosSession } from "../data/session";
 import { focusSearch } from "../hooks/search-focus";
 import { usePosStore } from "../store/pos-store";
+import { useOfflineSync } from "../offline/use-offline-sync";
 import { useTenderSummary } from "../store/selectors";
 import { BillPanel } from "./bill-panel";
+import { OfflineBanner } from "./offline-status";
 import { PosHeader } from "./pos-header";
 import { PosUserMenu } from "./pos-user-menu";
 import { ProductSearch } from "./product-search";
@@ -43,9 +45,22 @@ function PosWorkspace({ session }: { session: PosSession }) {
   const holdSale = usePosStore((state) => state.holdSale);
   const setNotice = usePosStore((state) => state.setNotice);
   const needsAuthorization = usePosStore((state) => state.needsAuthorization);
+  const setOfflineContext = usePosStore((state) => state.setOfflineContext);
+  const me = useSession((s) => s.user);
   const { isCovered } = useTenderSummary();
 
+  useOfflineSync(me?.id);
   useEffect(() => setRate(session.exchangeRate), [session.exchangeRate, setRate]);
+  useEffect(() => {
+    if (!me) return;
+    setOfflineContext({
+      userId: me.id,
+      cashierName: session.cashierName || me.fullName,
+      registerName: session.registerName,
+      discountLimitPercent: session.discountLimitPercent,
+      canAuthorizeDiscounts: can(me, "discounts:authorize"),
+    });
+  }, [me, session, setOfflineContext]);
 
   // Stock and the shift summary changed with the sale.
   useEffect(() => {
@@ -82,8 +97,9 @@ function PosWorkspace({ session }: { session: PosSession }) {
   });
 
   return (
-    <div className="grid h-dvh grid-rows-[auto_minmax(0,1fr)]">
+    <div className="grid h-dvh grid-rows-[auto_auto_minmax(0,1fr)] print:hidden">
       <PosHeader session={session} />
+      <OfflineBanner />
       <main className="grid min-h-0 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px]">
         <ProductSearch locked={mode !== "cart"} />
         <BillPanel />

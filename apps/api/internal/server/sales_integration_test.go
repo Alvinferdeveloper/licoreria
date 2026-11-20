@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -85,6 +86,26 @@ func TestSaleFlow(t *testing.T) {
 	}), http.StatusOK, "void with pin")
 	if stock() != 10 {
 		t.Errorf("voiding must return the stock, got %d", stock())
+	}
+
+	// A sale made without connection is recorded even past the stock, and the admins hear about it.
+	offline := map[string]any{
+		"ageVerified": true,
+		"offlineAt":   time.Now().Add(-10 * time.Minute).Format(time.RFC3339),
+		"lines":       []map[string]any{{"productId": productID, "quantity": 12}},
+		"payments":    []map[string]string{{"method": "cash", "currency": "NIO", "amount": "1400"}},
+	}
+	synced := cashier.sendJSON(http.MethodPost, "/sales", offline, map[string]string{"Idempotency-Key": uuid.NewString()})
+	expectStatus(t, synced, http.StatusCreated, "offline sale")
+	if synced.body["offlineAt"] == nil || stock() != -2 {
+		t.Fatalf("offline sale: offlineAt %v, stock %d (want -2)", synced.body["offlineAt"], stock())
+	}
+	if env.countEmails("lucia@elbarril.ni", "Venta sin conexión dejó stock negativo") != 1 {
+		t.Error("an offline sale past the stock should alert the admins")
+	}
+	offline["offlineAt"] = time.Now().Add(-72 * time.Hour).Format(time.RFC3339)
+	if res := cashier.sendJSON(http.MethodPost, "/sales", offline, map[string]string{"Idempotency-Key": uuid.NewString()}); res.status != http.StatusUnprocessableEntity {
+		t.Errorf("an offline sale older than 48 h must be refused, got %d", res.status)
 	}
 
 	// Every report runs against real data; exports and the dashboard render.

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMutation } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Money } from "@/components/money";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,8 @@ import { Sheet } from "@/components/ui/sheet";
 import { ApiError } from "@/lib/api/client";
 import { cn } from "@/lib/cn";
 import { amountToCents, formatMoney, parseAmount, toAmountString, type CurrencyCode } from "@/lib/money";
+import { posCopy } from "@/features/pos/copy";
+import { useOutbox } from "@/features/pos/offline/outbox";
 import { cashApi, type Shift, type ShiftSummary } from "../api";
 import { cashCopy } from "../copy";
 
@@ -32,6 +34,11 @@ export function CloseShiftSheet({ open, shift, summary, onClose, onDone }: Close
 }
 
 function CloseForm({ shift, summary, onClose, onDone }: Omit<CloseShiftSheetProps, "open">) {
+  // Sales saved offline on this device belong in this shift: they must reach the server first.
+  const unsent = useOutbox((s) => s.items.filter((i) => i.userId === shift.user.id).length);
+  useEffect(() => {
+    void useOutbox.getState().load(shift.user.id);
+  }, [shift.user.id]);
   const [nio, setNio] = useState("");
   const [usd, setUsd] = useState("");
   const [notes, setNotes] = useState("");
@@ -58,6 +65,7 @@ function CloseForm({ shift, summary, onClose, onDone }: Omit<CloseShiftSheetProp
   return (
     <form onSubmit={submit} className="space-y-5" noValidate>
       {errors.form && <Alert>{errors.form}</Alert>}
+      {unsent > 0 && <Alert>{posCopy.offline.closeBlocked(unsent)}</Alert>}
       <CountField label={copy.countedNio} currency="NIO" expected={summary.expectedNio} value={nio} onChange={setNio} error={errors.nio} autoFocus />
       <CountField label={copy.countedUsd} currency="USD" expected={summary.expectedUsd} value={usd} onChange={setUsd} error={errors.usd} />
       <Field label={copy.notes} hint={copy.notesHint}>
@@ -65,7 +73,7 @@ function CloseForm({ shift, summary, onClose, onDone }: Omit<CloseShiftSheetProp
       </Field>
       <div className="flex justify-end gap-2">
         <Button onClick={onClose}>{copy.cancel}</Button>
-        <Button type="submit" variant="primary" loading={mutation.isPending}>
+        <Button type="submit" variant="primary" loading={mutation.isPending} disabled={unsent > 0}>
           {copy.submit}
         </Button>
       </div>

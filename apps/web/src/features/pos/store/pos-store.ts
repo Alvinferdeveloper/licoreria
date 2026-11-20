@@ -20,6 +20,11 @@ import {
   type PosPresentation,
   type PosProduct,
 } from "../domain";
+import { posCopy } from "../copy";
+import { discountCachedStock } from "../offline/catalog-cache";
+import { isNetworkError, useConnectivity } from "../offline/connectivity";
+import { buildOfflineSale, unitsByProduct, type OfflineContext } from "../offline/offline-sale";
+import { useOutbox, type OfflineReceipt } from "../offline/outbox";
 
 export type PosMode = "cart" | "tender" | "complete";
 
@@ -31,6 +36,8 @@ export interface CompletedSale {
   change: Cents;
   itemCount: number;
   customerEmail: string | null;
+  /** Set when the sale was saved without connection; it prints as a provisional receipt. */
+  offline?: OfflineReceipt;
 }
 
 /** Last line added, with a nonce so repeated adds retrigger the highlight. */
@@ -61,8 +68,11 @@ interface PosState {
   lastSale: CompletedSale | null;
   flash: AddedFlash | null;
   notice: string | null;
+  /** Seller and rules to apply if a sale must be saved without connection. */
+  offlineContext: OfflineContext | null;
 
   setRate: (rate: number) => void;
+  setOfflineContext: (context: OfflineContext) => void;
   addToCart: (product: PosProduct, presentation?: PosPresentation | null) => boolean;
   changeQuantity: (key: string, quantity: number) => boolean;
   clearCart: () => void;
@@ -119,8 +129,11 @@ export const usePosStore = create<PosState>()(
       rate: 0,
       submitting: false,
       lastSale: null,
+      offlineContext: null,
 
       setRate: (rate) => set({ rate }),
+
+      setOfflineContext: (offlineContext) => set({ offlineContext }),
 
       addToCart: (product, presentation = null) => {
         const { lines, mode, products } = get();
@@ -195,6 +208,44 @@ export const usePosStore = create<PosState>()(
         const tender = summarizeTender(totals.total, state.payments, state.rate);
         if (!tender.isCovered || state.submitting || !state.saleKey) return;
         set({ submitting: true, error: null });
+
+        // Without connection the sale goes to the outbox and syncs later with the same key.
+        const saveOffline = async (): Promise<void> => {
+          const ctx = get().offlineContext;
+          if (!ctx || !state.saleKey) {
+            set({ submitting: false, error: posCopy.offline.unavailable });
+            return;
+          }
+          const result = buildOfflineSale(
+            { key: state.saleKey, lines: state.lines, discount: state.discount, customer: state.customer, payments: state.payments, rate: state.rate, input: toSaleInput(state, null) },
+            ctx,
+            new Date(),
+          );
+          if ("error" in result) {
+            set({ submitting: false, error: posCopy.offline.errors[result.error] });
+            return;
+          }
+          await useOutbox.getState().enqueue(result.sale);
+          await discountCachedStock(unitsByProduct(state.lines)).catch(() => undefined);
+          const { receipt } = result.sale;
+          set({
+            ...emptySale,
+            mode: "complete",
+            submitting: false,
+            lastSale: {
+              id: result.sale.key,
+              invoice: receipt.code,
+              total: receipt.total,
+              paid: tender.paid,
+              change: receipt.change,
+              itemCount: totals.itemCount,
+              customerEmail: null,
+              offline: receipt,
+            },
+          });
+        };
+
+        if (!useConnectivity.getState().online) return saveOffline();
         try {
           const sale = await salesApi.create(state.saleKey, toSaleInput(state, authorization ?? null));
           const paid = (sale.payments ?? []).reduce((sum, p) => sum + amountToCents(p.amountNio), 0);
@@ -213,6 +264,10 @@ export const usePosStore = create<PosState>()(
             },
           });
         } catch (error) {
+          if (isNetworkError(error)) {
+            useConnectivity.getState().setOnline(false);
+            return saveOffline();
+          }
           const needsAuthorization = error instanceof ApiError && (error.code === "authorization_required" || error.code === "authorization_failed");
           set({
             submitting: false,

@@ -38,6 +38,8 @@ type Movement struct {
 	SourceType string
 	SourceID   *uuid.UUID
 	UserID     uuid.UUID
+	// AllowNegative records a sale that already happened (offline) even without stock.
+	AllowNegative bool
 }
 
 // Ledger applies movements inside the caller's transaction.
@@ -61,7 +63,7 @@ func (l *Ledger) Apply(ctx context.Context, db database.DBTX, m Movement) (int, 
 		return 0, database.MapError(err, nil)
 	}
 	after := stock + m.Quantity
-	if m.Quantity < 0 && after < 0 && !allowNegative {
+	if m.Quantity < 0 && after < 0 && !allowNegative && !m.AllowNegative {
 		return 0, ErrInsufficientStock.
 			WithMessage(fmt.Sprintf("No hay stock suficiente de %s: quedan %d.", name, max(stock, 0))).
 			WithDetails(map[string]any{"productId": m.ProductID, "available": stock})

@@ -1646,6 +1646,10 @@ components:
               currency: { type: string, enum: [NIO, USD] }
               amount: { $ref: '#/components/schemas/Money' }
               reference: { type: [string, 'null'], maxLength: 60 }
+        offlineAt:
+          type: [string, 'null']
+          format: date-time
+          description: Cuándo se hizo la venta en el POS sin conexión (máx. 48 h atrás). Usa el horario y la tasa de ese momento, y el stock puede quedar negativo (avisa a los administradores).
     Sale:
       type: object
       properties:
@@ -1671,6 +1675,7 @@ components:
         voidReason: { type: [string, 'null'] }
         voidedAt: { type: [string, 'null'], format: date-time }
         createdAt: { type: string, format: date-time }
+        offlineAt: { type: [string, 'null'], format: date-time, description: 'Si se hizo sin conexión: la hora real de la venta (createdAt es cuando se sincronizó).' }
         items:
           type: array
           items:

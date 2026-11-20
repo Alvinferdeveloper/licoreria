@@ -3,6 +3,7 @@ import { ThemeToggle } from "@/features/theme";
 import { formatRate } from "@/lib/money";
 import { posCopy } from "../copy";
 import type { PosSession } from "../data/session";
+import { OfflineStatus } from "./offline-status";
 import { PosUserMenu } from "./pos-user-menu";
 
 export function PosHeader({ session }: { session: PosSession }) {
@@ -23,6 +24,7 @@ export function PosHeader({ session }: { session: PosSession }) {
       </span>
 
       <div className="ml-auto flex items-center gap-3">
+        <OfflineStatus />
         <span className="hidden text-label text-ink-muted lg:inline">
           {posCopy.header.rate}{" "}
           <span className="tabular font-mono text-ink">US$ 1 = C$ {formatRate(session.exchangeRate)}</span>

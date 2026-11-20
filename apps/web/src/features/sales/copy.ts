@@ -16,6 +16,7 @@ export const salesCopy = {
   detail: {
     title: (invoice: string) => `Factura ${invoice}`,
     meta: (register: string, cashier: string, when: string) => `${register} · ${cashier} · ${when}`,
+    offline: (when: string) => `Hecha sin conexión a las ${when}; se registró al volver la conexión.`,
     items: "Productos",
     qty: (q: number, units: number) => (units > 1 ? `${q} × ${units} u` : `${q}`),
     subtotal: "Subtotal",

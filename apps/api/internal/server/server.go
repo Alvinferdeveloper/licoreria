@@ -96,7 +96,7 @@ func NewRouter(deps Deps) http.Handler {
 				purchases.NewHandler(purchases.NewService(deps.DB, ledger)).Routes(protected)
 				rates.NewHandler(rates.NewService(deps.DB)).Routes(protected)
 				cash.NewHandler(cash.NewService(deps.DB, deps.Config.AppBaseURL)).Routes(protected)
-				sales.NewHandler(sales.NewService(deps.DB, ledger)).Routes(protected)
+				sales.NewHandler(sales.NewService(deps.DB, ledger, deps.Config.AppBaseURL)).Routes(protected)
 				settings.NewHandler(deps.DB).Routes(protected)
 				configuration.NewHandler(configuration.NewService(deps.DB, store)).Routes(protected)
 				reports.NewHandler(reports.NewService(deps.DB)).Routes(protected)
