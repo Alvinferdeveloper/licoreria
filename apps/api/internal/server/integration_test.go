@@ -241,6 +241,17 @@ func (e *testEnv) latestEmail(to string) string {
 	return body
 }
 
+// countEmails counts queued emails to the address whose subject starts with prefix.
+func (e *testEnv) countEmails(to, prefix string) int {
+	e.t.Helper()
+	var n int
+	if err := e.pool.QueryRow(context.Background(), `
+		SELECT count(*) FROM email_queue WHERE to_address = $1 AND starts_with(subject, $2)`, to, prefix).Scan(&n); err != nil {
+		e.t.Fatalf("count emails: %v", err)
+	}
+	return n
+}
+
 func mustURL(raw string) *url.URL {
 	u, err := url.Parse(raw)
 	if err != nil {

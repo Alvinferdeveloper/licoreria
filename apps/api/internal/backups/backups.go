@@ -77,6 +77,7 @@ type Service struct {
 	remote *storage.Supabase
 	gate   *Gate
 	logger *slog.Logger
+	appURL string
 	now    func() time.Time
 	// mu allows one dump, verification or restore at a time.
 	mu sync.Mutex
@@ -87,12 +88,13 @@ type Options struct {
 	Dir         string
 	Remote      *storage.Supabase
 	Logger      *slog.Logger
+	AppBaseURL  string
 }
 
 func NewService(pool *pgxpool.Pool, opts Options) *Service {
 	return &Service{
 		pool: pool, dsn: opts.DatabaseURL, dir: opts.Dir, remote: opts.Remote,
-		gate: &Gate{}, logger: opts.Logger.With("component", "backups"), now: time.Now,
+		gate: &Gate{}, logger: opts.Logger.With("component", "backups"), appURL: opts.AppBaseURL, now: time.Now,
 	}
 }
 

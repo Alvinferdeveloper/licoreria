@@ -20,6 +20,8 @@ Añejo es el sistema de punto de venta, inventario y facturación de la licorer�
 
 Tras varios intentos fallidos la cuenta se bloquea unos minutos. La sesión se cierra sola si queda inactiva. Si el negocio activó un horario de uso, fuera de él solo entran quienes tengan permiso; el mensaje dice a qué hora se habilita de nuevo.
 
+Si tienes correo, el sistema te avisa cuando tu contraseña cambia, cuando tu cuenta se bloquea y cuando entras fuera de horario. Si no fuiste tú, avisa al administrador de inmediato. Los administradores reciben aviso de cada cuenta bloqueada, de los intentos de entrar fuera de horario (uno por persona cada hora) y de cualquier fallo del respaldo automático.
+
 El ícono de la luna o el sol, junto al nombre del sistema, cambia entre tema claro y oscuro.
 
 ## 2. Empezar el día

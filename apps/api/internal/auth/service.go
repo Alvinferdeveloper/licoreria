@@ -126,6 +126,9 @@ func (s *Service) Login(ctx context.Context, identifier, plainPassword string) (
 		}
 		if !outsideBypass {
 			s.auditFailure(ctx, &creds.UserID, identifier, "outside_hours")
+			if s.firstOutsideAttempt(ctx, creds.UserID) {
+				s.alert(ctx, creds.UserID, nil, s.outsideAttemptAlert)
+			}
 			return Session{}, schedule.LoginClosed(hours.NextOpen, now)
 		}
 	}
@@ -153,6 +156,9 @@ func (s *Service) Login(ctx context.Context, identifier, plainPassword string) (
 	})
 	if err != nil {
 		return Session{}, err
+	}
+	if outsideBypass {
+		s.alert(ctx, creds.UserID, outsideLoginAlert, nil)
 	}
 	logx.From(ctx).Info("login succeeded", "user_id", creds.UserID)
 	return session, nil
@@ -182,6 +188,8 @@ func (s *Service) handleFailedLogin(ctx context.Context, creds credentials, secu
 	}); err != nil {
 		logx.From(ctx).Error("audit account lock", "error", err)
 	}
+	toOwner, toAdmins := s.lockedAlerts(*lockedUntil)
+	s.alert(ctx, creds.UserID, toOwner, toAdmins)
 	return accountLocked(*lockedUntil, s.now())
 }
 
@@ -327,7 +335,7 @@ func (s *Service) ChangePassword(ctx context.Context, p Principal, current, next
 	if err != nil {
 		return err
 	}
-	return database.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
+	err = database.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
 		if err := s.repo.setPassword(ctx, tx, p.UserID, newHash); err != nil {
 			return err
 		}
@@ -339,6 +347,10 @@ func (s *Service) ChangePassword(ctx context.Context, p Principal, current, next
 			After: map[string]bool{"wasTemporary": p.MustChangePassword},
 		})
 	})
+	if err == nil && !p.MustChangePassword {
+		s.alert(ctx, p.UserID, passwordChangedAlert, nil)
+	}
+	return err
 }
 
 func (s *Service) checkNewPassword(ctx context.Context, userID uuid.UUID, next string) error {
@@ -397,8 +409,10 @@ func (s *Service) ResetPassword(ctx context.Context, token, next string) error {
 		return err
 	}
 
-	return database.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
+	var resetUser uuid.UUID
+	err = database.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
 		userID, ok, err := s.repo.consumeAuthToken(ctx, tx, HashToken(token), purposePasswordReset, nil)
+		resetUser = userID
 		if err != nil {
 			return err
 		}
@@ -418,4 +432,8 @@ func (s *Service) ResetPassword(ctx context.Context, token, next string) error {
 			UserID: &userID, Action: audit.ActionPasswordReset, Entity: "users", EntityID: &userID,
 		})
 	})
+	if err == nil {
+		s.alert(ctx, resetUser, passwordChangedAlert, nil)
+	}
+	return err
 }

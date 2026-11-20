@@ -54,4 +54,31 @@ func TestUsageSchedule(t *testing.T) {
 	if res := env.newClient().login("marvin", "Caja1Turno2026"); res.errorCode() != "outside_hours" {
 		t.Fatalf("login after ending the extension: %d %v", res.status, res.body)
 	}
+
+	if n := env.countEmails("lucia@elbarril.ni", "Intento de entrada fuera de horario"); n != 1 {
+		t.Errorf("two blocked attempts within the hour should alert the admin once, got %d", n)
+	}
+	if n := env.countEmails("lucia@elbarril.ni", "Entraste fuera de horario"); n != 1 {
+		t.Errorf("the admin should be told about their own out-of-hours login, got %d", n)
+	}
+}
+
+func TestSecurityAlerts(t *testing.T) {
+	env := newTestEnv(t)
+	admin := env.createAdmin()
+	env.createCashier(admin)
+
+	for range 5 {
+		env.newClient().login("marvin", "Incorrecta2026")
+	}
+	if env.countEmails("marvin@elbarril.ni", "Tu cuenta se bloqueó") != 1 || env.countEmails("lucia@elbarril.ni", "Cuenta bloqueada: Marvin") != 1 {
+		t.Error("a lockout should alert the owner and the administrators")
+	}
+
+	expectStatus(t, admin.do(http.MethodPost, "/auth/change-password", map[string]string{
+		"currentPassword": adminPassword, "newPassword": "OtraClave2026Segura",
+	}), http.StatusNoContent, "change password")
+	if n := env.countEmails("lucia@elbarril.ni", "Tu contraseña cambió"); n != 1 {
+		t.Errorf("password change alerts = %d, want 1 (the first, forced change does not alert)", n)
+	}
 }

@@ -117,7 +117,9 @@ func NewBackups(cfg config.Config, logger *slog.Logger, db *pgxpool.Pool) *backu
 		Bucket:     cfg.Storage.BackupBucket,
 		Timeout:    10 * time.Minute,
 	})
-	return backups.NewService(db, backups.Options{DatabaseURL: cfg.DatabaseURL, Dir: cfg.Storage.BackupDir, Remote: remote, Logger: logger})
+	return backups.NewService(db, backups.Options{
+		DatabaseURL: cfg.DatabaseURL, Dir: cfg.Storage.BackupDir, Remote: remote, Logger: logger, AppBaseURL: cfg.AppBaseURL,
+	})
 }
 
 // Run serves until ctx is cancelled, then drains in-flight requests.

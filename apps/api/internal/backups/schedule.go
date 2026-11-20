@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"licoreria/api/internal/mail"
 	"licoreria/api/internal/platform/pdfx"
 	"licoreria/api/internal/settings"
 )
@@ -56,9 +57,26 @@ func (s *Service) runDue(ctx context.Context) error {
 		return nil
 	}
 	if _, err := s.create(ctx, KindScheduled, nil); err != nil {
+		// Retries run every hour; only the first failure since the last success alerts.
+		if lastTry == nil || (lastDone != nil && !lastTry.After(*lastDone)) {
+			s.alertFailure(ctx)
+		}
 		return err
 	}
 	return s.prune(ctx)
+}
+
+func (s *Service) alertFailure(ctx context.Context) {
+	err := mail.AlertAdmins(ctx, s.pool, mail.Alert{
+		Subject:     "Falló el respaldo automático",
+		Body:        "El respaldo automático de la base de datos no se pudo crear. El sistema lo reintentará cada hora. Revisa el espacio en disco del servidor o crea un respaldo manual.",
+		ActionURL:   s.appURL + "/respaldos",
+		ActionLabel: "Ver respaldos",
+		When:        s.now(),
+	})
+	if err != nil {
+		s.logger.ErrorContext(ctx, "queue backup failure alert", "error", err)
+	}
 }
 
 // isDue is true once today's slot has passed without a completed backup, spacing out retries.
