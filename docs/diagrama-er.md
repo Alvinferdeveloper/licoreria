@@ -271,7 +271,7 @@ erDiagram
     }
 ```
 
-Las tablas `returns` y `return_items` existen en el esquema, pero el módulo de devoluciones todavía no está construido.
+Las tablas `returns` y `return_items` existen en el esquema, pero el sistema no registra devoluciones: quedaron fuera del alcance de esta versión.
 
 ## Sistema
 

@@ -64,7 +64,7 @@ Abre **Vender > Punto de venta**. Todo el flujo se puede hacer solo con teclado:
 
 En **Vender > Ventas**, abre la venta y pulsa **Anular**, con un motivo. Sin el permiso de anular, pide el PIN de un administrador. El stock vuelve solo y la factura queda marcada como anulada.
 
-Solo se puede anular mientras el turno de esa venta siga abierto. Las devoluciones de ventas de turnos ya cerrados aún no están disponibles en el sistema.
+Solo se puede anular mientras el turno de esa venta siga abierto. El sistema no registra devoluciones de ventas de turnos ya cerrados.
 
 ## 5. Cerrar la caja
 

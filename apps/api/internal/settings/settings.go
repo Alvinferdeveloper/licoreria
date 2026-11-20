@@ -97,7 +97,7 @@ type Invoice struct {
 	FooterNote string `json:"footerNote"`
 }
 
-var DefaultInvoice = Invoice{FooterNote: "Cambios y devoluciones dentro de 7 días con esta factura, producto sellado y en buen estado."}
+var DefaultInvoice = Invoice{FooterNote: "Gracias por su compra. Conserve este comprobante."}
 
 func GetInvoice(ctx context.Context, db database.DBTX) (Invoice, error) {
 	value := DefaultInvoice

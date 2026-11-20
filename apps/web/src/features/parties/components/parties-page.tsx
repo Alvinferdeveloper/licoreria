@@ -19,6 +19,7 @@ import { applyApiError } from "@/lib/api/form-errors";
 import { cn } from "@/lib/cn";
 import { partiesApi, partiesKeys, type Party, type PartyFilters, type PartyKind } from "../api";
 import { partyConfigs, type PartyConfig } from "../config";
+import { partiesCopy as copy } from "../copy";
 
 /** Takes only the kind so server pages can render it; the config holds functions that stay client-side. */
 export function PartiesPage({ kind: partyKind }: { kind: PartyKind }) {
@@ -40,7 +41,7 @@ export function PartiesPage({ kind: partyKind }: { kind: PartyKind }) {
   const statusMutation = useMutation({
     mutationFn: ({ item, value }: { item: Party; value: boolean }) => partiesApi.setActive(kind, item.id, value),
     onSuccess: (item) => {
-      success(`${nameOf(item)} ${item.active ? "se activó" : "se desactivó"}.`);
+      success(copy.notices.toggled(nameOf(item), item.active));
       void refresh();
     },
     onError: failure,
@@ -48,40 +49,41 @@ export function PartiesPage({ kind: partyKind }: { kind: PartyKind }) {
 
   const columns: Column<Party>[] = [
     {
-      header: "Nombre",
+      header: copy.columns.name,
       skeleton: 60,
       cell: (row) => (
         <div>
           <p className="font-medium text-ink">{nameOf(row)}</p>
-          <p className="text-caption text-ink-muted">{config.detail(row) || "Sin datos de contacto"}</p>
+          <p className="text-caption text-ink-muted">{config.detail(row) || copy.noContact}</p>
         </div>
       ),
     },
-    { header: "Correo", skeleton: 40, cell: (row) => <span className="text-label text-ink-muted">{String(row.email ?? "")}</span> },
+    { header: copy.columns.email, skeleton: 40, cell: (row) => <span className="text-label text-ink-muted">{String(row.email ?? "")}</span> },
     {
-      header: "Estado",
+      header: copy.columns.status,
       skeleton: 25,
-      cell: (row) => row.isWalkIn ? <Badge tone="amber">Predeterminado</Badge> : row.active ? <Badge tone="success">Activo</Badge> : <Badge>Inactivo</Badge>,
+      cell: (row) =>
+        row.isWalkIn ? <Badge tone="amber">{copy.status.walkIn}</Badge> : row.active ? <Badge tone="success">{copy.status.active}</Badge> : <Badge>{copy.status.inactive}</Badge>,
     },
     {
-      header: <span className="sr-only">Acciones</span>,
+      header: <span className="sr-only">{copy.columns.actions}</span>,
       className: "w-px px-2",
       skeleton: 0,
       cell: (row) =>
         row.isWalkIn ? null : (
           <RowActions>
             {can(me, `${permission}:update`) && (
-              <Button variant="ghost" size="icon-sm" aria-label={`Editar ${nameOf(row)}`} onClick={() => setSheet({ open: true, item: row })}>
+              <Button variant="ghost" size="icon-sm" aria-label={copy.actions.edit(nameOf(row))} onClick={() => setSheet({ open: true, item: row })}>
                 <PencilSimple size={16} />
               </Button>
             )}
             {can(me, `${permission}:delete`) && (row.active ? (
-              <ConfirmButton size="sm" confirmLabel="¿Confirmar?" onConfirm={() => statusMutation.mutate({ item: row, value: false })}>
-                Desactivar
+              <ConfirmButton size="sm" confirmLabel={copy.actions.confirm} onConfirm={() => statusMutation.mutate({ item: row, value: false })}>
+                {copy.actions.deactivate}
               </ConfirmButton>
             ) : (
               <Button variant="ghost" size="sm" onClick={() => statusMutation.mutate({ item: row, value: true })}>
-                Activar
+                {copy.actions.activate}
               </Button>
             ))}
           </RowActions>
@@ -106,7 +108,7 @@ export function PartiesPage({ kind: partyKind }: { kind: PartyKind }) {
       <div className="space-y-4 px-8 pb-10">
         <div className="flex flex-wrap items-center gap-3">
           <SearchInput value={search} onChange={(v) => { setSearch(v); setPage(1); }} placeholder={config.search} />
-          <FilterChips label="Estado" value={active} options={STATUS_OPTIONS} onChange={(v) => { setActive(v); setPage(1); }} />
+          <FilterChips label={copy.statusFilter} value={active} options={STATUS_OPTIONS} onChange={(v) => { setActive(v); setPage(1); }} />
         </div>
         <NoticeBanner notice={notice} />
         <DataTable
@@ -116,14 +118,14 @@ export function PartiesPage({ kind: partyKind }: { kind: PartyKind }) {
           loading={list.isPending}
           error={list.isError}
           onRetry={() => list.refetch()}
-          empty={{ title: "Sin resultados", body: `Ningún ${config.singular} coincide con la búsqueda.` }}
+          empty={copy.empty(config.singular)}
           rowClassName={(r) => (r.active ? undefined : "text-ink-muted")}
           minWidth={640}
         />
         <Pagination meta={list.data?.meta} onPage={setPage} />
       </div>
 
-      <Sheet open={sheet.open} onClose={() => setSheet({ open: false, item: null })} title={sheet.item ? `Editar ${config.singular}` : config.create}>
+      <Sheet open={sheet.open} onClose={() => setSheet({ open: false, item: null })} title={sheet.item ? copy.editTitle(config.singular) : config.create}>
         <PartyForm
           key={sheet.item?.id ?? "new"}
           config={config}
@@ -131,7 +133,7 @@ export function PartiesPage({ kind: partyKind }: { kind: PartyKind }) {
           onCancel={() => setSheet({ open: false, item: null })}
           onSaved={(saved) => {
             setSheet({ open: false, item: null });
-            success(`${nameOf(saved)} se guardó.`);
+            success(copy.notices.saved(nameOf(saved)));
             void refresh();
           }}
         />
@@ -174,17 +176,17 @@ function PartyForm({ config, item, onCancel, onSaved }: { config: PartyConfig; i
               autoFocus={i === 0}
               placeholder={f.placeholder}
               className={cn(f.mono && "font-mono")}
-              {...form.register(f.name, f.required ? { required: "Este campo es obligatorio." } : {})}
+              {...form.register(f.name, f.required ? { required: copy.form.required } : {})}
             />
           </Field>
         ))}
       </div>
       <div className="flex justify-end gap-2 border-t border-line pt-5">
         <Button variant="ghost" onClick={onCancel}>
-          Cancelar
+          {copy.form.cancel}
         </Button>
         <Button type="submit" variant="primary" loading={isSubmitting}>
-          Guardar
+          {copy.form.save}
         </Button>
       </div>
     </form>

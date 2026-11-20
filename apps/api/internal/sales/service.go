@@ -30,7 +30,7 @@ var (
 	ErrProductUnavailable = apperr.New(apperr.KindConflict, "product_unavailable", "Un producto del carrito ya no está a la venta.")
 	ErrNeedsAuthorization = apperr.New(apperr.KindForbidden, "authorization_required", "Este descuento supera tu límite y necesita el PIN de un administrador.")
 	ErrAlreadyVoided      = apperr.New(apperr.KindConflict, "sale_voided", "La venta ya está anulada.")
-	ErrShiftClosed        = apperr.New(apperr.KindConflict, "sale_shift_closed", "El turno de esa venta ya cerró; registra una devolución en su lugar.")
+	ErrShiftClosed        = apperr.New(apperr.KindConflict, "sale_shift_closed", "El turno de esa venta ya cerró y ya no se puede anular.")
 	ErrKeyReused          = apperr.New(apperr.KindConflict, "idempotency_key_reused", "Esa clave de venta ya fue usada por otro usuario.")
 )
 

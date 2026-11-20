@@ -50,8 +50,8 @@ export const settingsCopy = {
       { value: "invoice", label: "Factura detallada" },
     ] satisfies { value: PrintFormat; label: string }[],
     footer: "Nota al pie",
-    footerHint: "Por ejemplo, tu política de cambios. Las leyendas de mayoría de edad y de comprobante interno siempre se imprimen.",
-    footerPlaceholder: "Ej. Cambios solo con factura y producto sellado, dentro de 3 días.",
+    footerHint: "Por ejemplo, un agradecimiento o tus redes sociales. Las leyendas de mayoría de edad y de comprobante interno siempre se imprimen.",
+    footerPlaceholder: "Ej. Gracias por preferirnos. Síguenos en Instagram @bodegaanejo",
   },
   schedule: {
     title: "Horario de uso",
