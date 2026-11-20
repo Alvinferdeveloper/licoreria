@@ -64,6 +64,7 @@ export const posCopy = {
     confirm: "Confirmar venta",
     saving: "Registrando…",
     nonCashCapped: "Tarjeta y transferencia cobran solo el saldo pendiente.",
+    partialHint: "No cubre el total: pulsa Enter para agregarlo como pago parcial y completa con otro.",
     authorization: {
       title: "Autorización de un administrador",
       body: "El descuento supera tu límite. Un administrador debe escribir su usuario y PIN.",

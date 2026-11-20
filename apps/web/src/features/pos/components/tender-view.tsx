@@ -48,6 +48,18 @@ export function TenderView() {
 
   const due = amountDue(tender.remaining, currency, rate);
   const symbol = CURRENCIES[currency].symbol;
+  // A typed amount counts even before Enter: if it covers the sale, the confirm button takes it.
+  const typed = parseAmount(amountInput);
+  const typedCovers = !tender.isCovered && typed !== null && typed > 0 && paymentInBase({ id: "", method, currency, amount: typed }, rate) >= tender.remaining;
+  const canConfirm = tender.isCovered || typedCovers;
+
+  const confirm = () => {
+    if (typedCovers && typed) {
+      addPayment({ method, currency, amount: typed });
+      setAmountInput("");
+    }
+    void confirmSale();
+  };
 
   const pay = (amount: number) => {
     addPayment({ method, currency, amount });
@@ -132,6 +144,7 @@ export function TenderView() {
                 />
               </div>
               {method !== "cash" && <p className="text-caption text-ink-muted">{posCopy.tender.nonCashCapped}</p>}
+              {typed !== null && typed > 0 && !typedCovers && <p className="text-caption text-ink-muted">{posCopy.tender.partialHint}</p>}
             </div>
 
             <div className="grid grid-cols-3 gap-2">
@@ -182,7 +195,7 @@ export function TenderView() {
         {needsAuthorization ? (
           <AuthorizationForm busy={submitting} onSubmit={(authorization) => void confirmSale(authorization)} />
         ) : (
-          <Button variant="primary" size="xl" className="w-full justify-between" disabled={!tender.isCovered} loading={submitting} onClick={() => void confirmSale()}>
+          <Button variant="primary" size="xl" className="w-full justify-between" disabled={!canConfirm} loading={submitting} onClick={confirm}>
             {submitting ? posCopy.tender.saving : posCopy.tender.confirm}
             <Kbd className="bg-on-accent/15 text-on-accent">{posCopy.shortcuts.confirm}</Kbd>
           </Button>
