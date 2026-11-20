@@ -72,7 +72,14 @@ func serve(cfg config.Config, logger *slog.Logger) error {
 	}
 	defer pool.Close()
 
-	sender, err := mail.NewSMTPSender(cfg.Mail)
+	var sender mail.Sender
+	if cfg.Mail.ResendAPIKey != "" {
+		sender, err = mail.NewResendSender(cfg.Mail.ResendAPIKey, cfg.Mail.From)
+		logger.Info("mail via resend")
+	} else {
+		sender, err = mail.NewSMTPSender(cfg.Mail)
+		logger.Info("mail via smtp", "host", cfg.Mail.SMTPHost)
+	}
 	if err != nil {
 		return err
 	}

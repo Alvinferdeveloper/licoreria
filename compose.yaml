@@ -39,6 +39,7 @@ services:
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       MAIL_FROM: ${MAIL_FROM:-Añejo <no-reply@anejo.local>}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
       SUPABASE_URL: ${SUPABASE_URL:-}
       SUPABASE_SERVICE_KEY: ${SUPABASE_SERVICE_KEY:-}
       SUPABASE_BUCKET: ${SUPABASE_BUCKET:-productos}

@@ -72,11 +72,9 @@ APP_ENV=production
 APP_BASE_URL=https://tu-dominio.com
 CORS_ALLOWED_ORIGINS=https://tu-dominio.com
 
-# Correo real, por ejemplo Resend
-SMTP_HOST=smtp.resend.com
-SMTP_PORT=587
-SMTP_USERNAME=resend
-SMTP_PASSWORD=tu-clave
+# Correo real con Resend (el dominio de MAIL_FROM debe estar verificado en Resend).
+# Sin RESEND_API_KEY se usa SMTP_HOST/SMTP_PORT/SMTP_USERNAME/SMTP_PASSWORD.
+RESEND_API_KEY=re_tu_clave
 MAIL_FROM=Tu negocio <ventas@tu-dominio.com>
 
 # Imágenes y logo: bucket público de Supabase

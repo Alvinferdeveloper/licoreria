@@ -52,6 +52,8 @@ type MailConfig struct {
 	SMTPUsername string
 	SMTPPassword string
 	From         string
+	// ResendAPIKey, when set, sends through Resend's API instead of SMTP.
+	ResendAPIKey string
 }
 
 func (c Config) IsProduction() bool { return c.Env == "production" }
@@ -83,6 +85,7 @@ func Load() (Config, error) {
 			SMTPUsername: os.Getenv("SMTP_USERNAME"),
 			SMTPPassword: os.Getenv("SMTP_PASSWORD"),
 			From:         getEnv("MAIL_FROM", "Añejo <no-reply@anejo.local>"),
+			ResendAPIKey: os.Getenv("RESEND_API_KEY"),
 		},
 		Storage: StorageConfig{
 			SupabaseURL:        os.Getenv("SUPABASE_URL"),
