@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -20,6 +21,7 @@ import (
 	"licoreria/api/internal/platform/logx"
 	"licoreria/api/internal/platform/pdfx"
 	"licoreria/api/internal/rates"
+	"licoreria/api/internal/schedule"
 	"licoreria/api/internal/settings"
 )
 
@@ -165,6 +167,11 @@ func (s *Service) Create(ctx context.Context, actor auth.Principal, key uuid.UUI
 	}
 	if !in.AgeVerified {
 		return Sale{}, false, ErrAgeNotVerified
+	}
+	if hours, err := schedule.Evaluate(ctx, s.pool, actor.UserID, time.Now()); err != nil {
+		return Sale{}, false, err
+	} else if hours.Blocked(actor.Can("schedule", "authorize")) {
+		return Sale{}, false, schedule.ErrSalesClosed
 	}
 	// Report a missing shift or rate before asking for a PIN; both are rechecked in the transaction.
 	if _, _, err := cash.OpenShiftFor(ctx, s.pool, actor.UserID); err != nil {

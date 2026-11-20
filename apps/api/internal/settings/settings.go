@@ -104,6 +104,35 @@ func GetInvoice(ctx context.Context, db database.DBTX) (Invoice, error) {
 	return value, get(ctx, db, "invoice", &value)
 }
 
+// ScheduleDay is one weekday's usage window in "HH:MM"; a close at or before the open
+// means the window ends the next day.
+type ScheduleDay struct {
+	Closed bool   `json:"closed"`
+	Open   string `json:"open"`
+	Close  string `json:"close"`
+}
+
+// Schedule limits when users without schedule:authorize may sign in and sell.
+// Days is indexed by time.Weekday (Sunday first).
+type Schedule struct {
+	Enabled          bool           `json:"enabled"`
+	ToleranceMinutes int            `json:"toleranceMinutes"`
+	Days             [7]ScheduleDay `json:"days"`
+}
+
+var DefaultSchedule = func() Schedule {
+	s := Schedule{ToleranceMinutes: 30}
+	for i := range s.Days {
+		s.Days[i] = ScheduleDay{Open: "08:00", Close: "22:00"}
+	}
+	return s
+}()
+
+func GetSchedule(ctx context.Context, db database.DBTX) (Schedule, error) {
+	value := DefaultSchedule
+	return value, get(ctx, db, "schedule", &value)
+}
+
 // Set merges value into the stored JSON, so keys this version doesn't know are kept.
 func Set(ctx context.Context, db database.DBTX, key string, value any, by uuid.UUID) error {
 	raw, err := json.Marshal(value)

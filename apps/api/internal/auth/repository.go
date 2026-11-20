@@ -64,6 +64,20 @@ func (Repository) recordFailedLogin(ctx context.Context, db database.DBTX, userI
 	return lockedUntil, nil
 }
 
+func (Repository) userCan(ctx context.Context, db database.DBTX, userID uuid.UUID, module, action string) (bool, error) {
+	var ok bool
+	err := db.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM users u
+			JOIN role_permissions rp ON rp.role_id = u.role_id
+			JOIN permissions p ON p.id = rp.permission_id
+			WHERE u.id = $1 AND p.module = $2 AND p.action = $3)`, userID, module, action).Scan(&ok)
+	if err != nil {
+		return false, fmt.Errorf("check permission: %w", err)
+	}
+	return ok, nil
+}
+
 func (Repository) recordSuccessfulLogin(ctx context.Context, db database.DBTX, userID uuid.UUID) error {
 	_, err := db.Exec(ctx, `
 		UPDATE users SET failed_attempts = 0, locked_until = NULL, last_login_at = now() WHERE id = $1`, userID)

@@ -18,6 +18,7 @@ import (
 	"licoreria/api/internal/platform/database"
 	"licoreria/api/internal/platform/logx"
 	"licoreria/api/internal/platform/password"
+	"licoreria/api/internal/schedule"
 	"licoreria/api/internal/settings"
 )
 
@@ -114,6 +115,21 @@ func (s *Service) Login(ctx context.Context, identifier, plainPassword string) (
 		return Session{}, ErrTemporaryExpired
 	}
 
+	hours, err := schedule.Evaluate(ctx, s.pool, creds.UserID, now)
+	if err != nil {
+		return Session{}, err
+	}
+	outsideBypass := false
+	if hours.Outside && !hours.Extended {
+		if outsideBypass, err = s.repo.userCan(ctx, s.pool, creds.UserID, "schedule", "authorize"); err != nil {
+			return Session{}, err
+		}
+		if !outsideBypass {
+			s.auditFailure(ctx, &creds.UserID, identifier, "outside_hours")
+			return Session{}, schedule.LoginClosed(hours.NextOpen, now)
+		}
+	}
+
 	var session Session
 	err = database.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
 		if err := s.repo.recordSuccessfulLogin(ctx, tx, creds.UserID); err != nil {
@@ -123,8 +139,16 @@ func (s *Service) Login(ctx context.Context, identifier, plainPassword string) (
 		if err != nil {
 			return err
 		}
-		return audit.Record(ctx, tx, audit.Entry{
+		if err := audit.Record(ctx, tx, audit.Entry{
 			UserID: &creds.UserID, Action: audit.ActionLoginSucceeded, Entity: "users", EntityID: &creds.UserID,
+		}); err != nil {
+			return err
+		}
+		if !outsideBypass {
+			return nil
+		}
+		return audit.Record(ctx, tx, audit.Entry{
+			UserID: &creds.UserID, Action: audit.ActionLoginOutsideHours, Entity: "users", EntityID: &creds.UserID,
 		})
 	})
 	if err != nil {

@@ -6,7 +6,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRef, useState, type ReactNode } from "react";
 import { Controller, useForm } from "react-hook-form";
-import { z } from "zod";
 import { NoticeBanner, useNotice } from "@/components/data/toolbar";
 import { PageHeader } from "@/components/shell/page-header";
 import { Alert } from "@/components/ui/alert";
@@ -18,52 +17,15 @@ import { useSession } from "@/features/auth/session-store";
 import { cashApi, cashKeys } from "@/features/cash/api";
 import { ApiError } from "@/lib/api/client";
 import { applyApiError } from "@/lib/api/form-errors";
-import { settingsApi, settingsKeys, type PrintFormat, type Settings, type SettingsInput } from "../api";
+import { settingsApi, settingsKeys, type Settings } from "../api";
 import { settingsCopy as copy } from "../copy";
+import { settingsSchema, toInput, toValues, type SettingsValues } from "../schema";
+import { ScheduleExtensions } from "./schedule-extensions";
+import { ScheduleFields } from "./schedule-fields";
 
-const { validation: v } = copy;
 const ph = copy.business.placeholders;
 
-const percent = z.string().trim().regex(/^\d{1,3}(\.\d{1,2})?$/, v.percent).refine((s) => Number(s) <= 100, v.percent);
-
-const schema = z.object({
-  name: z.string().trim().min(1, v.name).max(120),
-  taxId: z.string().trim().max(30),
-  address: z.string().trim().max(200),
-  phone: z.string().trim().max(40),
-  email: z.string().trim().max(120).refine((s) => s === "" || z.email().safeParse(s).success, v.email),
-  taxPercent: percent,
-  discountLimitPercent: percent,
-  defaultPrintFormat: z.enum(["ticket", "invoice"]),
-  footerNote: z.string().trim().max(160),
-});
-
-type Values = z.infer<typeof schema>;
-
 const FIELDS = ["name", "taxId", "address", "phone", "email", "footerNote"] as const;
-
-function toValues(s: Settings): Values {
-  return {
-    name: s.business.name,
-    taxId: s.business.taxId,
-    address: s.business.address,
-    phone: s.business.phone,
-    email: s.business.email,
-    taxPercent: String(s.tax.defaultPercent),
-    discountLimitPercent: String(s.pos.discountLimitPercent),
-    defaultPrintFormat: s.pos.defaultPrintFormat === "invoice" ? "invoice" : "ticket",
-    footerNote: s.invoice.footerNote,
-  };
-}
-
-function toInput(v: Values): SettingsInput {
-  return {
-    business: { name: v.name, taxId: v.taxId, address: v.address, phone: v.phone, email: v.email },
-    tax: { defaultPercent: Number(v.taxPercent) },
-    pos: { discountLimitPercent: Number(v.discountLimitPercent), defaultPrintFormat: v.defaultPrintFormat as PrintFormat },
-    invoice: { footerNote: v.footerNote },
-  };
-}
 
 function Section({ title, hint, children }: { title: string; hint: string; children: ReactNode }) {
   return (
@@ -96,7 +58,7 @@ function SettingsForm({ settings }: { settings: Settings }) {
   const queryClient = useQueryClient();
   const { notice, success, failure } = useNotice();
   const [formError, setFormError] = useState<string | null>(null);
-  const form = useForm<Values>({ resolver: zodResolver(schema), defaultValues: toValues(settings) });
+  const form = useForm<SettingsValues>({ resolver: zodResolver(settingsSchema), defaultValues: toValues(settings) });
   const { errors } = form.formState;
 
   const refresh = (next: Settings) => {
@@ -175,7 +137,15 @@ function SettingsForm({ settings }: { settings: Settings }) {
             <Input {...form.register("footerNote")} maxLength={160} placeholder={copy.invoice.footerPlaceholder} />
           </Field>
         </Section>
+
+        <Section title={copy.schedule.title} hint={copy.schedule.hint}>
+          <ScheduleFields form={form} />
+        </Section>
       </fieldset>
+
+      <Section title={copy.extensions.title} hint={copy.extensions.hint}>
+        <ScheduleExtensions editable={editable} onMessage={success} />
+      </Section>
 
       <Section title={copy.numbering.title} hint={copy.numbering.hint}>
         <Numbering />

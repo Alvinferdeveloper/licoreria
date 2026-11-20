@@ -34,6 +34,7 @@ type View struct {
 	Tax      settings.Tax      `json:"tax"`
 	POS      settings.POS      `json:"pos"`
 	Invoice  settings.Invoice  `json:"invoice"`
+	Schedule settings.Schedule `json:"schedule"`
 }
 
 // Input is everything the screen edits; the logo has its own endpoints.
@@ -41,6 +42,8 @@ type Input struct {
 	Name, TaxID, Address, Phone, Email string
 	TaxPercent, DiscountLimitPercent   float64
 	DefaultPrintFormat, FooterNote     string
+	// Schedule is nil when the caller leaves the usage hours untouched.
+	Schedule *settings.Schedule
 }
 
 type Service struct {
@@ -66,11 +69,19 @@ func load(ctx context.Context, db database.DBTX) (View, error) {
 	if v.POS, err = settings.GetPOS(ctx, db); err != nil {
 		return View{}, err
 	}
-	v.Invoice, err = settings.GetInvoice(ctx, db)
+	if v.Invoice, err = settings.GetInvoice(ctx, db); err != nil {
+		return View{}, err
+	}
+	v.Schedule, err = settings.GetSchedule(ctx, db)
 	return v, err
 }
 
 func (s *Service) Update(ctx context.Context, actor auth.Principal, in Input) (View, error) {
+	if in.Schedule != nil {
+		if err := checkSchedule(*in.Schedule); err != nil {
+			return View{}, err
+		}
+	}
 	var after View
 	err := database.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
 		before, err := load(ctx, tx)
@@ -87,8 +98,11 @@ func (s *Service) Update(ctx context.Context, actor auth.Principal, in Input) (V
 		after.POS.DiscountLimitPercent = in.DiscountLimitPercent
 		after.POS.DefaultPrintFormat = in.DefaultPrintFormat
 		after.Invoice.FooterNote = strings.TrimSpace(in.FooterNote)
+		if in.Schedule != nil {
+			after.Schedule = *in.Schedule
+		}
 
-		for key, value := range map[string]any{"business": after.Business, "tax": after.Tax, "pos": after.POS, "invoice": after.Invoice} {
+		for key, value := range map[string]any{"business": after.Business, "tax": after.Tax, "pos": after.POS, "invoice": after.Invoice, "schedule": after.Schedule} {
 			if err := settings.Set(ctx, tx, key, value, actor.UserID); err != nil {
 				return err
 			}

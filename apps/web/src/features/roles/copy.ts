@@ -33,6 +33,7 @@ export const rolesCopy = {
     users: "Usuarios",
     roles: "Roles y permisos",
     settings: "Configuración",
+    schedule: "Fuera de horario",
     backups: "Respaldos",
     audit: "Bitácora",
   } as Record<string, string>,

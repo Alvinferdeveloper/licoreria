@@ -18,7 +18,7 @@ Añejo es el sistema de punto de venta, inventario y facturación de la licorer�
    El enlace y el código sirven una sola vez y vencen en 72 horas.
 3. Si la olvidaste y tienes correo, usa **¿La olvidaste?** y sigue el enlace del correo. Si no tienes correo, pide al administrador un código de acceso nuevo.
 
-Tras varios intentos fallidos la cuenta se bloquea unos minutos. La sesión se cierra sola si queda inactiva.
+Tras varios intentos fallidos la cuenta se bloquea unos minutos. La sesión se cierra sola si queda inactiva. Si el negocio activó un horario de uso, fuera de él solo entran quienes tengan permiso; el mensaje dice a qué hora se habilita de nuevo.
 
 El ícono de la luna o el sol, junto al nombre del sistema, cambia entre tema claro y oscuro.
 
@@ -126,6 +126,8 @@ En **Sistema > Configuración** se definen:
 - IVA para productos nuevos. No cambia productos existentes ni facturas emitidas.
 - Porcentaje de descuento permitido sin autorización.
 - Formato de impresión por defecto y nota al pie.
+- **Horario de uso:** qué días y entre qué horas se puede usar el sistema, con una tolerancia (30 minutos por defecto) antes de abrir y después de cerrar. Si el cierre es igual o anterior a la apertura, el turno termina al día siguiente. Fuera del horario, quien no tenga el permiso **Fuera de horario** no puede entrar ni registrar ventas nuevas, pero sí cerrar su caja. El Administrador siempre tiene ese permiso, y puede darlo a otros roles. Cada vez que alguien entra fuera de horario con permiso, queda en la bitácora.
+- **Extensiones de hoy:** para un inventario, un evento o un cierre tarde, extiende el horario hasta una hora, para todos o para una persona. La extensión vence sola, se puede terminar antes y queda en la bitácora.
 
 La numeración se lleva por caja. Cada una tiene su serie, que se administra en **Turnos de caja** y se bloquea tras la primera factura.
 
@@ -144,4 +146,5 @@ La numeración se lleva por caja. Cada una tiene su serie, que se administra en 
 | No queda más stock | Revisa el kardex o registra la compra pendiente |
 | Este descuento supera tu límite | Pide el usuario y PIN de un administrador |
 | El turno de esa venta ya cerró | La venta ya no se puede anular |
+| Estás fuera del horario de uso / El horario de ventas terminó | Cierra tu caja; si hay que seguir, el administrador extiende el horario en Configuración |
 | El almacenamiento de imágenes no está configurado | Faltan las credenciales de Supabase en el servidor |

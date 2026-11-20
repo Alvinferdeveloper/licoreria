@@ -1000,6 +1000,47 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/Settings' }
         default: { $ref: '#/components/responses/Error' }
+  /schedule/extensions:
+    get:
+      tags: [Configuración]
+      summary: Extensiones de horario vigentes
+      description: 'Permiso: `settings:view`.'
+      responses:
+        '200':
+          description: Extensiones que todavía no vencen
+          content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/ScheduleExtension' } } } } } }
+        default: { $ref: '#/components/responses/Error' }
+    post:
+      tags: [Configuración]
+      summary: Extender el horario de uso
+      description: 'Permiso: `settings:update`. Permite entrar y vender hasta la próxima vez que el reloj del local marque `until`. Sin `userId`, aplica a todos.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [until]
+              properties:
+                userId: { type: [string, 'null'], format: uuid }
+                until: { type: string, pattern: '^\d{2}:\d{2}$', example: '23:30' }
+      responses:
+        '201':
+          description: Extensión creada
+          content: { application/json: { schema: { $ref: '#/components/schemas/ScheduleExtension' } } }
+        default: { $ref: '#/components/responses/Error' }
+  /schedule/extensions/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    delete:
+      tags: [Configuración]
+      summary: Terminar una extensión ahora
+      description: 'Permiso: `settings:update`. La extensión queda en el historial con su nueva hora de fin.'
+      responses:
+        '200':
+          description: Extensión terminada
+          content: { application/json: { schema: { $ref: '#/components/schemas/ScheduleExtension' } } }
+        default: { $ref: '#/components/responses/Error' }
   /backups:
     get:
       tags: [Respaldos]
@@ -1727,6 +1768,33 @@ components:
             allowNegativeStock: { type: boolean }
             defaultPrintFormat: { type: string, enum: [ticket, invoice] }
         invoice: { type: object, properties: { footerNote: { type: string } } }
+        schedule: { $ref: '#/components/schemas/Schedule' }
+    Schedule:
+      type: object
+      description: Horario de uso. Fuera de él, quien no tenga `schedule:authorize` no puede entrar ni vender; cerrar caja siempre se puede.
+      properties:
+        enabled: { type: boolean }
+        toleranceMinutes: { type: integer, minimum: 0, maximum: 120 }
+        days:
+          type: array
+          description: De domingo a sábado. Si el cierre es igual o anterior a la apertura, termina al día siguiente.
+          minItems: 7
+          maxItems: 7
+          items:
+            type: object
+            properties:
+              closed: { type: boolean }
+              open: { type: string, example: '08:00' }
+              close: { type: string, example: '22:00' }
+    ScheduleExtension:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        userId: { type: [string, 'null'], format: uuid, description: 'Nulo: aplica a todos.' }
+        userName: { type: [string, 'null'] }
+        endsAt: { type: string, format: date-time }
+        createdByName: { type: string }
+        createdAt: { type: string, format: date-time }
     StoreSettings: { $ref: '#/components/schemas/Settings' }
     SettingsInput:
       type: object
@@ -1749,6 +1817,7 @@ components:
             discountLimitPercent: { type: number, minimum: 0, maximum: 100 }
             defaultPrintFormat: { type: string, enum: [ticket, invoice] }
         invoice: { type: object, properties: { footerNote: { type: string, maxLength: 160 } } }
+        schedule: { $ref: '#/components/schemas/Schedule' }
     Backup:
       type: object
       properties:

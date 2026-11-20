@@ -1,6 +1,6 @@
 # Diagrama entidad-relación
 
-Base de datos PostgreSQL 16 con 32 tablas, creadas por las migraciones de `apps/api/migrations`. El modelo se divide por dominio para que cada diagrama se pueda leer; las tablas que se repiten son el punto de unión entre dominios. Solo se muestran las columnas clave.
+Base de datos PostgreSQL 16 con 33 tablas, creadas por las migraciones de `apps/api/migrations`. El modelo se divide por dominio para que cada diagrama se pueda leer; las tablas que se repiten son el punto de unión entre dominios. Solo se muestran las columnas clave.
 
 Decisiones de diseño:
 
@@ -279,12 +279,19 @@ Las tablas `returns` y `return_items` existen en el esquema, pero el módulo de 
 erDiagram
     users ||--o{ backups : "crea"
     users |o--o{ settings : "actualiza"
+    users |o--o{ schedule_extensions : "recibe o autoriza"
     email_templates ||--o{ email_queue : "origina"
 
     settings {
         text key PK
         jsonb value
         uuid updated_by FK
+    }
+    schedule_extensions {
+        uuid id PK
+        uuid user_id FK "nulo: todos"
+        timestamptz ends_at
+        uuid created_by FK
     }
     backups {
         uuid id PK

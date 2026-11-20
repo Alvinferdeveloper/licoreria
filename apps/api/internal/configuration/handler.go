@@ -6,10 +6,12 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 
 	"licoreria/api/internal/apperr"
 	"licoreria/api/internal/auth"
 	"licoreria/api/internal/httpx"
+	"licoreria/api/internal/settings"
 )
 
 type Handler struct {
@@ -23,6 +25,51 @@ func (h *Handler) Routes(r chi.Router) {
 	r.With(auth.Require("settings", "update")).Put("/settings", h.update)
 	r.With(auth.Require("settings", "update")).Post("/settings/logo", h.uploadLogo)
 	r.With(auth.Require("settings", "update")).Delete("/settings/logo", h.removeLogo)
+	r.With(auth.Require("settings", "view")).Get("/schedule/extensions", h.extensions)
+	r.With(auth.Require("settings", "update")).Post("/schedule/extensions", h.extend)
+	r.With(auth.Require("settings", "update")).Delete("/schedule/extensions/{id}", h.endExtension)
+}
+
+func (h *Handler) extensions(w http.ResponseWriter, r *http.Request) {
+	items, err := h.svc.Extensions(r.Context())
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	httpx.JSON(w, r, http.StatusOK, map[string]any{"data": items})
+}
+
+type extendRequest struct {
+	UserID *uuid.UUID `json:"userId"`
+	Until  string     `json:"until" validate:"required,len=5"`
+}
+
+func (h *Handler) extend(w http.ResponseWriter, r *http.Request) {
+	var req extendRequest
+	if err := httpx.Bind(w, r, &req); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	ext, err := h.svc.Extend(r.Context(), actor(r), req.UserID, req.Until)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	httpx.JSON(w, r, http.StatusCreated, ext)
+}
+
+func (h *Handler) endExtension(w http.ResponseWriter, r *http.Request) {
+	id, err := httpx.URLParamUUID(r, "id")
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	ext, err := h.svc.EndExtension(r.Context(), actor(r), id)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	httpx.JSON(w, r, http.StatusOK, ext)
 }
 
 func actor(r *http.Request) auth.Principal {
@@ -57,6 +104,7 @@ type updateRequest struct {
 	Invoice struct {
 		FooterNote string `json:"footerNote" validate:"max=160"`
 	} `json:"invoice"`
+	Schedule *settings.Schedule `json:"schedule"`
 }
 
 func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
@@ -69,6 +117,7 @@ func (h *Handler) update(w http.ResponseWriter, r *http.Request) {
 		Name: req.Business.Name, TaxID: req.Business.TaxID, Address: req.Business.Address, Phone: req.Business.Phone, Email: req.Business.Email,
 		TaxPercent: req.Tax.DefaultPercent, DiscountLimitPercent: req.POS.DiscountLimitPercent,
 		DefaultPrintFormat: req.POS.DefaultPrintFormat, FooterNote: req.Invoice.FooterNote,
+		Schedule: req.Schedule,
 	})
 	if err != nil {
 		httpx.Fail(w, r, err)
