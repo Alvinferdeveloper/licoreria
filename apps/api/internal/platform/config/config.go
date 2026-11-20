@@ -109,6 +109,9 @@ func Load() (Config, error) {
 	if len(cfg.Auth.JWTSecret) < minJWTSecretBytes {
 		errs = append(errs, fmt.Errorf("JWT_SECRET must be at least %d bytes", minJWTSecretBytes))
 	}
+	if strings.HasPrefix(cfg.Storage.SupabaseServiceKey, "sb_publishable_") {
+		errs = append(errs, errors.New("SUPABASE_SERVICE_KEY must be the secret (sb_secret_…) or service_role key, not the publishable key"))
+	}
 	if cfg.LogFormat != "text" && cfg.LogFormat != "json" {
 		errs = append(errs, errors.New("LOG_FORMAT must be text or json"))
 	}

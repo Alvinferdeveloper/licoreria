@@ -122,9 +122,13 @@ func (s *Supabase) objectURL(key string) string {
 	return fmt.Sprintf("%s/storage/v1/object/%s/%s", s.cfg.URL, url.PathEscape(s.cfg.Bucket), escapeKey(key))
 }
 
+// authorize sends the server key. New secret keys (sb_secret_…) are not JWTs and go only in
+// apikey; the legacy service_role key is a JWT and also goes as the bearer token.
 func (s *Supabase) authorize(req *http.Request) {
-	req.Header.Set("Authorization", "Bearer "+s.cfg.ServiceKey)
 	req.Header.Set("apikey", s.cfg.ServiceKey)
+	if !strings.HasPrefix(s.cfg.ServiceKey, "sb_") {
+		req.Header.Set("Authorization", "Bearer "+s.cfg.ServiceKey)
+	}
 }
 
 func (s *Supabase) do(req *http.Request) error {
