@@ -93,7 +93,15 @@ export function RestoreSheet({ backup, onClose }: { backup: Backup | null; onClo
           <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" disabled={mutation.isPending} />
         </Field>
         <Field label={copy.phrase(CONFIRMATION_PHRASE)} error={phraseError}>
-          <Input value={phrase} onChange={(e) => setPhrase(e.target.value)} autoComplete="off" spellCheck={false} className="font-mono" disabled={mutation.isPending} />
+          <Input
+            value={phrase}
+            onChange={(e) => setPhrase(e.target.value)}
+            autoComplete="off"
+            spellCheck={false}
+            placeholder={CONFIRMATION_PHRASE}
+            className="font-mono"
+            disabled={mutation.isPending}
+          />
         </Field>
       </form>
     </Sheet>

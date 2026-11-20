@@ -174,10 +174,16 @@ function RegisterForm({ register, onCancel, onSaved }: { register: Register | nu
     >
       {formError && <Alert>{formError}</Alert>}
       <Field label={regCopy.name} error={error?.fieldMessage("name")}>
-        <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus maxLength={60} />
+        <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus maxLength={60} placeholder={regCopy.namePlaceholder} />
       </Field>
       <Field label={regCopy.series} hint={regCopy.seriesHint} error={error?.fieldMessage("invoiceSeries")}>
-        <Input value={series} onChange={(e) => setSeries(e.target.value.toUpperCase())} className={cn("font-mono uppercase")} maxLength={8} />
+        <Input
+          value={series}
+          onChange={(e) => setSeries(e.target.value.toUpperCase())}
+          className={cn("font-mono uppercase")}
+          maxLength={8}
+          placeholder={regCopy.seriesPlaceholder}
+        />
       </Field>
       <Checkbox checked={active} onChange={(e) => setActive(e.target.checked)} label={regCopy.active} />
       <div className="flex justify-end gap-2">

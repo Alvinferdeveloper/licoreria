@@ -34,7 +34,7 @@ export function AuthorizationForm({ busy, onSubmit, title = copy.title, body = c
       </div>
       <div className="grid grid-cols-2 gap-3">
         <Field label={copy.username}>
-          <Input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" autoFocus />
+          <Input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" autoCapitalize="none" placeholder={copy.usernamePlaceholder} autoFocus />
         </Field>
         <Field label={copy.pin}>
           <Input value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))} type="password" inputMode="numeric" maxLength={6} autoComplete="off" />

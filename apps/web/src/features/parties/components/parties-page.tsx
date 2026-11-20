@@ -172,6 +172,7 @@ function PartyForm({ config, item, onCancel, onSaved }: { config: PartyConfig; i
               type={f.type === "number" ? "text" : (f.type ?? "text")}
               inputMode={f.type === "number" ? "numeric" : undefined}
               autoFocus={i === 0}
+              placeholder={f.placeholder}
               className={cn(f.mono && "font-mono")}
               {...form.register(f.name, f.required ? { required: "Este campo es obligatorio." } : {})}
             />

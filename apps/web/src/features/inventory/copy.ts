@@ -49,6 +49,7 @@ export const inventoryCopy = {
       { value: "shrinkage", label: "Merma o rotura" },
     ] as const,
     counted: "Unidades contadas",
+    quantityPlaceholders: { count: "Ej. 24", shrinkage: "Ej. 1" },
     countedHint: (diff: number) => (diff === 0 ? "Coincide con el sistema." : `Diferencia: ${diff > 0 ? "+" : ""}${diff}`),
     lost: "Unidades perdidas",
     reason: "Motivo",

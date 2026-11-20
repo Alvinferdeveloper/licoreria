@@ -204,10 +204,10 @@ function EditorForm({ purchase, suppliers }: { purchase: Purchase | undefined; s
               <Input type="date" max={todayISO()} {...register("purchaseDate")} disabled={!editable} />
             </Field>
             <Field label={copy.invoice} hint={copy.invoiceHint} error={formState.errors.supplierInvoiceNumber?.message}>
-              <Input {...register("supplierInvoiceNumber")} disabled={!editable} className="font-mono" autoComplete="off" />
+              <Input {...register("supplierInvoiceNumber")} disabled={!editable} className="font-mono" autoComplete="off" placeholder={copy.invoicePlaceholder} />
             </Field>
             <Field label={copy.notes} error={formState.errors.notes?.message}>
-              <Input {...register("notes")} disabled={!editable} autoComplete="off" />
+              <Input {...register("notes")} disabled={!editable} autoComplete="off" placeholder={copy.notesPlaceholder} />
             </Field>
           </section>
 
@@ -305,7 +305,7 @@ function LineRow({ index, control, editable, register, errors, onRemove }: LineR
       <td className={cn(cell, "text-right")}>
         {editable ? (
           <>
-            <Input {...register(`items.${index}.quantity`)} inputMode="numeric" aria-label={`Cantidad de ${line.name}`} aria-invalid={errors?.quantity ? true : undefined} className="h-9 text-right font-mono tabular" />
+            <Input {...register(`items.${index}.quantity`)} inputMode="numeric" placeholder={copy.quantityPlaceholder} aria-label={`Cantidad de ${line.name}`} aria-invalid={errors?.quantity ? true : undefined} className="h-9 text-right font-mono tabular" />
             {errors?.quantity && <p className="mt-1 text-caption text-danger">{errors.quantity.message}</p>}
           </>
         ) : (
@@ -315,7 +315,7 @@ function LineRow({ index, control, editable, register, errors, onRemove }: LineR
       <td className={cn(cell, "text-right")}>
         {editable ? (
           <>
-            <Input {...register(`items.${index}.unitCost`)} inputMode="decimal" aria-label={`Costo unitario de ${line.name}`} aria-invalid={errors?.unitCost ? true : undefined} className="h-9 text-right font-mono tabular" />
+            <Input {...register(`items.${index}.unitCost`)} inputMode="decimal" placeholder={copy.costPlaceholder} aria-label={`Costo unitario de ${line.name}`} aria-invalid={errors?.unitCost ? true : undefined} className="h-9 text-right font-mono tabular" />
             {errors?.unitCost && <p className="mt-1 text-caption text-danger">{errors.unitCost.message}</p>}
           </>
         ) : (
@@ -392,7 +392,7 @@ function VoidSheet({ open, onClose, onVoid, onFailure }: { open: boolean; onClos
         }}
       >
         <Field label={copy.voidReason} error={error ?? undefined}>
-          <Input value={reason} onChange={(e) => setReason(e.target.value)} autoFocus maxLength={300} />
+          <Input value={reason} onChange={(e) => setReason(e.target.value)} autoFocus maxLength={300} placeholder={copy.voidReasonPlaceholder} />
         </Field>
         <div className="flex justify-end gap-2">
           <Button onClick={onClose}>{copy.cancel}</Button>

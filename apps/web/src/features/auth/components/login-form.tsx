@@ -38,7 +38,14 @@ export function LoginForm() {
     <form onSubmit={onSubmit} noValidate className="space-y-5">
       {formError && <Alert>{formError}</Alert>}
       <Field label={copy.identifier} error={errors.identifier?.message}>
-        <Input autoComplete="username" autoFocus autoCapitalize="none" spellCheck={false} {...form.register("identifier")} />
+        <Input
+          autoComplete="username"
+          autoFocus
+          autoCapitalize="none"
+          spellCheck={false}
+          placeholder={copy.identifierPlaceholder}
+          {...form.register("identifier")}
+        />
       </Field>
       <Field
         label={copy.password}

@@ -15,6 +15,7 @@ import type { Master, Product, ProductInput } from "../api";
 import { productsCopy } from "../copy";
 
 const { form: copy, validation: v } = productsCopy;
+const ph = copy.placeholders;
 
 const money = z.string().trim().regex(/^\d{1,11}(\.\d{1,2})?$/, v.money);
 const percent = z.string().trim().regex(/^\d{1,3}(\.\d{1,2})?$/, v.percent).refine((s) => Number(s) <= 100, v.percent);
@@ -133,13 +134,13 @@ export function ProductForm({ product, categories, brands, units, canEditPrices,
 
       <Section title={copy.sections.general}>
         <Field label={copy.name} error={errors.name?.message} className="sm:col-span-2">
-          <Input autoFocus {...form.register("name")} />
+          <Input autoFocus placeholder={ph.name} {...form.register("name")} />
         </Field>
         <Field label={copy.sku} hint={copy.skuHint} error={errors.sku?.message}>
-          <Input className="font-mono uppercase" autoCapitalize="characters" spellCheck={false} {...form.register("sku")} />
+          <Input className="font-mono uppercase" autoCapitalize="characters" spellCheck={false} placeholder={ph.sku} {...form.register("sku")} />
         </Field>
         <Field label={copy.barcode} hint={copy.barcodeHint} error={errors.barcode?.message}>
-          <Input className="font-mono" inputMode="numeric" spellCheck={false} {...form.register("barcode")} />
+          <Input className="font-mono" inputMode="numeric" spellCheck={false} placeholder={ph.barcode} {...form.register("barcode")} />
         </Field>
         <Field label={copy.category} error={errors.categoryId?.message}>
           <MasterSelect items={categories} placeholder={copy.select} {...form.register("categoryId")} />
@@ -158,7 +159,7 @@ export function ProductForm({ product, categories, brands, units, canEditPrices,
           <MoneyInput disabled={priceLocked} {...form.register("price")} />
         </Field>
         <Field label={copy.tax} error={errors.taxPercent?.message}>
-          <Input inputMode="decimal" className="tabular text-right font-mono" disabled={priceLocked} {...form.register("taxPercent")} />
+          <Input inputMode="decimal" className="tabular text-right font-mono" disabled={priceLocked} placeholder={ph.tax} {...form.register("taxPercent")} />
         </Field>
         {!product && canEditPrices && (
           <Field label={copy.cost} hint={copy.costHint} error={errors.averageCost?.message}>
@@ -171,23 +172,23 @@ export function ProductForm({ product, categories, brands, units, canEditPrices,
       <Section title={copy.sections.stock}>
         {product && <p className="text-label text-ink-muted sm:col-span-2">{copy.currentStock(product.stock)}</p>}
         <Field label={copy.minStock} error={errors.minStock?.message}>
-          <Input inputMode="numeric" className="tabular text-right font-mono" {...form.register("minStock")} />
+          <Input inputMode="numeric" className="tabular text-right font-mono" placeholder={ph.minStock} {...form.register("minStock")} />
         </Field>
         <Field label={copy.reorderPoint} error={errors.reorderPoint?.message}>
-          <Input inputMode="numeric" className="tabular text-right font-mono" {...form.register("reorderPoint")} />
+          <Input inputMode="numeric" className="tabular text-right font-mono" placeholder={ph.reorderPoint} {...form.register("reorderPoint")} />
         </Field>
         <Checkbox label={copy.allowNegative} className="sm:col-span-2" {...form.register("allowNegativeStock")} />
       </Section>
 
       <Section title={copy.sections.details}>
         <Field label={copy.alcohol} error={errors.alcoholPercent?.message}>
-          <Input inputMode="decimal" className="tabular text-right font-mono" {...form.register("alcoholPercent")} />
+          <Input inputMode="decimal" className="tabular text-right font-mono" placeholder={ph.alcohol} {...form.register("alcoholPercent")} />
         </Field>
         <Field label={copy.volume} error={errors.volumeMl?.message}>
-          <Input inputMode="numeric" className="tabular text-right font-mono" {...form.register("volumeMl")} />
+          <Input inputMode="numeric" className="tabular text-right font-mono" placeholder={ph.volume} {...form.register("volumeMl")} />
         </Field>
         <Field label={copy.description} className="sm:col-span-2">
-          <textarea rows={2} className={`${inputClassName} h-auto py-2`} {...form.register("description")} />
+          <textarea rows={2} className={`${inputClassName} h-auto py-2`} placeholder={ph.description} {...form.register("description")} />
         </Field>
       </Section>
 
@@ -201,13 +202,13 @@ export function ProductForm({ product, categories, brands, units, canEditPrices,
           return (
             <div key={field.id} className="grid grid-cols-[minmax(0,1.4fr)_5rem_minmax(0,1.2fr)_minmax(0,1fr)_auto] items-start gap-2">
               <Field label={copy.presentationName} error={e?.name?.message}>
-                <Input placeholder="Six-pack" {...form.register(`presentations.${index}.name`)} />
+                <Input placeholder={ph.presentationName} {...form.register(`presentations.${index}.name`)} />
               </Field>
               <Field label={copy.factor} error={e?.factor?.message}>
-                <Input inputMode="numeric" className="tabular text-right font-mono" {...form.register(`presentations.${index}.factor`)} />
+                <Input inputMode="numeric" className="tabular text-right font-mono" placeholder={ph.factor} {...form.register(`presentations.${index}.factor`)} />
               </Field>
               <Field label={copy.barcode} error={e?.barcode?.message}>
-                <Input className="font-mono" {...form.register(`presentations.${index}.barcode`)} />
+                <Input className="font-mono" placeholder={ph.presentationBarcode} {...form.register(`presentations.${index}.barcode`)} />
               </Field>
               <Field label={copy.presentationPrice} error={e?.price?.message}>
                 <MoneyInput disabled={priceLocked} {...form.register(`presentations.${index}.price`)} />
@@ -265,7 +266,7 @@ function MoneyInput(props: ComponentProps<"input">) {
   return (
     <div className="relative">
       <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 font-mono text-label text-ink-subtle">C$</span>
-      <Input inputMode="decimal" className="tabular pl-10 text-right font-mono" {...props} />
+      <Input inputMode="decimal" className="tabular pl-10 text-right font-mono" placeholder={ph.money} {...props} />
     </div>
   );
 }

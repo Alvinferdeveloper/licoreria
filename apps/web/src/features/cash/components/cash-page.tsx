@@ -99,10 +99,10 @@ function OpenShiftForm() {
       )}
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label={copy.open.openingNio} error={errors.nio}>
-          <Input value={nio} onChange={(e) => setNio(e.target.value)} inputMode="decimal" className="font-mono tabular" onFocus={(e) => e.target.select()} />
+          <Input value={nio} onChange={(e) => setNio(e.target.value)} inputMode="decimal" placeholder={copy.amountPlaceholder} className="font-mono tabular" onFocus={(e) => e.target.select()} />
         </Field>
         <Field label={copy.open.openingUsd} error={errors.usd}>
-          <Input value={usd} onChange={(e) => setUsd(e.target.value)} inputMode="decimal" className="font-mono tabular" onFocus={(e) => e.target.select()} />
+          <Input value={usd} onChange={(e) => setUsd(e.target.value)} inputMode="decimal" placeholder={copy.amountPlaceholder} className="font-mono tabular" onFocus={(e) => e.target.select()} />
         </Field>
       </div>
       <Button type="submit" variant="primary" size="lg" loading={open.isPending} disabled={free.length === 0}>

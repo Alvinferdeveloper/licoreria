@@ -1,6 +1,7 @@
 export const cashCopy = {
   title: "Caja",
   description: "Abre tu turno con el fondo inicial, registra entradas y salidas de efectivo y ciérralo contando lo que hay en la gaveta.",
+  amountPlaceholder: "0.00",
   rate: {
     label: "Tasa del día",
     value: (rate: string) => `C$ ${rate} por US$ 1`,
@@ -70,6 +71,7 @@ export const cashCopy = {
     balanced: "Cuadra",
     notes: "Nota (opcional)",
     notesHint: "Explica cualquier diferencia. Si no cuadra, se avisa al administrador.",
+    notesPlaceholder: "Ej. Faltan C$ 20: se dio vuelto de más a un cliente",
     submit: "Cerrar caja",
     cancel: "Cancelar",
   },
@@ -105,7 +107,9 @@ export const cashCopy = {
     create: "Nueva caja",
     edit: "Editar caja",
     name: "Nombre",
+    namePlaceholder: "Ej. Caja 3",
     series: "Serie de facturas",
+    seriesPlaceholder: "F003",
     seriesHint: "De 2 a 8 letras o números, por ejemplo F002. No cambia una vez emitidas facturas.",
     next: (n: number) => `Próxima factura: ${n}`,
     active: "Activa",

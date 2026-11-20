@@ -22,6 +22,7 @@ import { settingsApi, settingsKeys, type PrintFormat, type Settings, type Settin
 import { settingsCopy as copy } from "../copy";
 
 const { validation: v } = copy;
+const ph = copy.business.placeholders;
 
 const percent = z.string().trim().regex(/^\d{1,3}(\.\d{1,2})?$/, v.percent).refine((s) => Number(s) <= 100, v.percent);
 
@@ -123,21 +124,21 @@ function SettingsForm({ settings }: { settings: Settings }) {
       <fieldset disabled={!editable} className="min-w-0">
         <Section title={copy.business.title} hint={copy.business.hint}>
           <Field label={copy.business.name} error={errors.name?.message}>
-            <Input {...form.register("name")} maxLength={120} />
+            <Input {...form.register("name")} maxLength={120} placeholder={ph.name} />
           </Field>
           <div className="grid gap-5 sm:grid-cols-2">
             <Field label={copy.business.taxId} error={errors.taxId?.message}>
-              <Input {...form.register("taxId")} className="font-mono" maxLength={30} autoComplete="off" />
+              <Input {...form.register("taxId")} className="font-mono" maxLength={30} autoComplete="off" placeholder={ph.taxId} />
             </Field>
             <Field label={copy.business.phone} error={errors.phone?.message}>
-              <Input {...form.register("phone")} inputMode="tel" maxLength={40} />
+              <Input {...form.register("phone")} inputMode="tel" maxLength={40} placeholder={ph.phone} />
             </Field>
           </div>
           <Field label={copy.business.address} error={errors.address?.message}>
-            <Input {...form.register("address")} maxLength={200} />
+            <Input {...form.register("address")} maxLength={200} placeholder={ph.address} />
           </Field>
           <Field label={copy.business.email} error={errors.email?.message}>
-            <Input {...form.register("email")} type="email" maxLength={120} />
+            <Input {...form.register("email")} type="email" maxLength={120} placeholder={ph.email} />
           </Field>
         </Section>
 
@@ -148,10 +149,15 @@ function SettingsForm({ settings }: { settings: Settings }) {
         <Section title={copy.sales.title} hint={copy.sales.hint}>
           <div className="grid gap-5 sm:grid-cols-2">
             <Field label={copy.sales.tax} error={errors.taxPercent?.message}>
-              <Input {...form.register("taxPercent")} inputMode="decimal" className="tabular text-right font-mono" />
+              <Input {...form.register("taxPercent")} inputMode="decimal" className="tabular text-right font-mono" placeholder={copy.sales.taxPlaceholder} />
             </Field>
             <Field label={copy.sales.discount} error={errors.discountLimitPercent?.message} hint={copy.sales.discountHint}>
-              <Input {...form.register("discountLimitPercent")} inputMode="decimal" className="tabular text-right font-mono" />
+              <Input
+                {...form.register("discountLimitPercent")}
+                inputMode="decimal"
+                className="tabular text-right font-mono"
+                placeholder={copy.sales.discountPlaceholder}
+              />
             </Field>
           </div>
         </Section>
@@ -166,7 +172,7 @@ function SettingsForm({ settings }: { settings: Settings }) {
             />
           </div>
           <Field label={copy.invoice.footer} error={errors.footerNote?.message} hint={copy.invoice.footerHint}>
-            <Input {...form.register("footerNote")} maxLength={160} />
+            <Input {...form.register("footerNote")} maxLength={160} placeholder={copy.invoice.footerPlaceholder} />
           </Field>
         </Section>
       </fieldset>

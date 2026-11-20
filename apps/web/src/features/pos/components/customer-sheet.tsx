@@ -100,13 +100,13 @@ function QuickCreate({ initialName, onCreated, onCancel }: { initialName: string
     >
       {error && !error.fields.length && <Alert>{error.message}</Alert>}
       <Field label={copy.name} error={error?.fieldMessage("fullName")}>
-        <Input value={fullName} onChange={(e) => setFullName(e.target.value)} autoFocus maxLength={120} />
+        <Input value={fullName} onChange={(e) => setFullName(e.target.value)} autoFocus maxLength={120} placeholder={copy.namePlaceholder} />
       </Field>
       <Field label={copy.taxId} error={error?.fieldMessage("taxId")}>
-        <Input value={taxId} onChange={(e) => setTaxId(e.target.value)} className="font-mono" maxLength={20} />
+        <Input value={taxId} onChange={(e) => setTaxId(e.target.value)} className="font-mono" maxLength={20} placeholder={copy.taxIdPlaceholder} />
       </Field>
       <Field label={copy.email} error={error?.fieldMessage("email")}>
-        <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={254} />
+        <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} maxLength={254} placeholder={copy.emailPlaceholder} />
       </Field>
       <div className="flex justify-end gap-2">
         <Button onClick={onCancel}>{copy.cancel}</Button>

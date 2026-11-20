@@ -61,7 +61,7 @@ function CloseForm({ shift, summary, onClose, onDone }: Omit<CloseShiftSheetProp
       <CountField label={copy.countedNio} currency="NIO" expected={summary.expectedNio} value={nio} onChange={setNio} error={errors.nio} autoFocus />
       <CountField label={copy.countedUsd} currency="USD" expected={summary.expectedUsd} value={usd} onChange={setUsd} error={errors.usd} />
       <Field label={copy.notes} hint={copy.notesHint}>
-        <Input value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={500} />
+        <Input value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={500} placeholder={copy.notesPlaceholder} />
       </Field>
       <div className="flex justify-end gap-2">
         <Button onClick={onClose}>{copy.cancel}</Button>
@@ -90,7 +90,7 @@ function CountField({ label, currency, expected, value, onChange, error, autoFoc
   return (
     <div className="space-y-2">
       <Field label={label} error={error} hint={copy.expected(formatMoney(amountToCents(expected), currency))}>
-        <Input value={value} onChange={(e) => onChange(e.target.value)} inputMode="decimal" className="h-12 text-body-lg font-mono tabular" autoFocus={autoFocus} autoComplete="off" />
+        <Input value={value} onChange={(e) => onChange(e.target.value)} inputMode="decimal" placeholder={cashCopy.amountPlaceholder} className="h-12 text-body-lg font-mono tabular" autoFocus={autoFocus} autoComplete="off" />
       </Field>
       {diff !== null && value.trim() !== "" && (
         <p className={cn("flex justify-between rounded-md px-3 py-2 text-label", diff === 0 ? "bg-success-tint text-success" : "bg-danger-tint text-danger")}>

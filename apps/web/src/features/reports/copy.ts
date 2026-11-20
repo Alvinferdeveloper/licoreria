@@ -12,6 +12,7 @@ export const reportsCopy = {
   any: "Todas",
   pickProduct: "Buscar producto",
   clearProduct: "Quitar",
+  textFilter: "Escribe para filtrar",
   excel: "Excel",
   pdf: "PDF",
   required: (label: string) => `Elige ${label.toLowerCase()} para ver el reporte.`,

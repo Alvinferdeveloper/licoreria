@@ -56,7 +56,7 @@ function MovementForm({ shiftId, onClose, onDone }: { shiftId: string; onClose: 
       <SegmentedControl label={copy.type} value={type} options={copy.types} onChange={setType} />
       <SegmentedControl label={copy.currency} value={currency} options={copy.currencies} onChange={setCurrency} />
       <Field label={copy.amount} error={errors.amount}>
-        <Input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" className="font-mono tabular" autoFocus autoComplete="off" />
+        <Input value={amount} onChange={(e) => setAmount(e.target.value)} inputMode="decimal" placeholder={cashCopy.amountPlaceholder} className="font-mono tabular" autoFocus autoComplete="off" />
       </Field>
       <Field label={copy.reason} error={errors.reason}>
         <Input value={reason} onChange={(e) => setReason(e.target.value)} placeholder={copy.reasonPlaceholder} maxLength={300} />

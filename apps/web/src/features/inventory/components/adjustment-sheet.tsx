@@ -92,7 +92,14 @@ function AdjustmentForm({ onClose, onDone }: { onClose: () => void; onDone: (nam
         error={errors.quantity}
         hint={diff !== null ? <span className={diff < 0 ? "text-danger" : undefined}>{copy.countedHint(diff)}</span> : undefined}
       >
-        <Input value={quantity} onChange={(e) => setQuantity(e.target.value)} inputMode="numeric" className="font-mono tabular" autoComplete="off" />
+        <Input
+          value={quantity}
+          onChange={(e) => setQuantity(e.target.value)}
+          inputMode="numeric"
+          placeholder={copy.quantityPlaceholders[kind]}
+          className="font-mono tabular"
+          autoComplete="off"
+        />
       </Field>
 
       <Field label={copy.reason} error={errors.reason}>

@@ -46,7 +46,15 @@ function DiscountForm({ current, subtotal, onApply, onClose }: Omit<DiscountShee
     <form onSubmit={submit} className="space-y-5" noValidate>
       <SegmentedControl label={copy.kind} value={kind} options={copy.kinds} onChange={setKind} />
       <Field label={copy.value} error={error ?? undefined}>
-        <Input value={value} onChange={(e) => setValue(e.target.value)} inputMode="decimal" className="font-mono tabular" autoFocus autoComplete="off" />
+        <Input
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          inputMode="decimal"
+          placeholder={copy.placeholders[kind]}
+          className="font-mono tabular"
+          autoFocus
+          autoComplete="off"
+        />
       </Field>
       <div className="flex justify-between gap-2">
         {current ? (

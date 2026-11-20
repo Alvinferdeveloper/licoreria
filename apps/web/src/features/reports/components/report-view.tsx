@@ -140,7 +140,7 @@ function ReportScreen({ def, catalog }: { def: ReportDefinition; catalog: Report
                     <ProductPicker placeholder={copy.pickProduct} className="w-72 font-normal" onPick={(prod) => { setProductName(prod.name); set(p.key, prod.id); }} />
                   )
                 ) : (
-                  <Input value={value} onChange={(e) => set(p.key, e.target.value)} className="h-9 w-48" />
+                  <Input value={value} onChange={(e) => set(p.key, e.target.value)} placeholder={copy.textFilter} className="h-9 w-48" />
                 )}
               </label>
             );

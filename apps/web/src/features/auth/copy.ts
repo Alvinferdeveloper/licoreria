@@ -4,6 +4,7 @@ export const authCopy = {
   login: {
     title: "Inicia sesión",
     identifier: "Usuario o correo",
+    identifierPlaceholder: "Ej. ana.perez",
     password: "Contraseña",
     forgot: "¿La olvidaste?",
     submit: "Entrar",

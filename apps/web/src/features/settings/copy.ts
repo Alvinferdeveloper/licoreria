@@ -14,6 +14,13 @@ export const settingsCopy = {
     address: "Dirección",
     phone: "Teléfono",
     email: "Correo",
+    placeholders: {
+      name: "Ej. Bodega Añejo",
+      taxId: "J0310000012345",
+      address: "Ej. Rotonda El Güegüense 2 c. al sur, Managua",
+      phone: "2250 1234",
+      email: "ventas@bodegaanejo.com.ni",
+    },
   },
   logo: {
     title: "Logo",
@@ -31,6 +38,8 @@ export const settingsCopy = {
     tax: "IVA para productos nuevos (%)",
     discount: "Descuento sin autorización (%)",
     discountHint: "Sobre este límite, el cajero necesita el PIN de un administrador.",
+    taxPlaceholder: "15",
+    discountPlaceholder: "Ej. 10",
   },
   invoice: {
     title: "Factura y ticket",
@@ -42,6 +51,7 @@ export const settingsCopy = {
     ] satisfies { value: PrintFormat; label: string }[],
     footer: "Nota al pie",
     footerHint: "Por ejemplo, tu política de cambios. Las leyendas de mayoría de edad y de comprobante interno siempre se imprimen.",
+    footerPlaceholder: "Ej. Cambios solo con factura y producto sellado, dentro de 3 días.",
   },
   numbering: {
     title: "Numeración",

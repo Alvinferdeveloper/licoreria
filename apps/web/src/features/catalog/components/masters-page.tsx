@@ -17,11 +17,12 @@ import { can } from "@/features/auth/api";
 import { useSession } from "@/features/auth/session-store";
 import { applyApiError } from "@/lib/api/form-errors";
 import { catalogApi, catalogKeys, type Master, type MasterKind } from "../api";
+import { mastersCopy as copy } from "../copy";
 
 const KINDS = {
-  categories: { label: "Categorías", singular: "categoría", hasParent: true, hasAbbrev: false, hasActive: true },
-  brands: { label: "Marcas", singular: "marca", hasParent: false, hasAbbrev: false, hasActive: true },
-  units: { label: "Unidades", singular: "unidad", hasParent: false, hasAbbrev: true, hasActive: false },
+  categories: { ...copy.kinds.categories, hasParent: true, hasAbbrev: false, hasActive: true },
+  brands: { ...copy.kinds.brands, hasParent: false, hasAbbrev: false, hasActive: true },
+  units: { ...copy.kinds.units, hasParent: false, hasAbbrev: true, hasActive: false },
 } as const;
 
 const TABS = (Object.keys(KINDS) as MasterKind[]).map((value) => ({ value, label: KINDS[value].label }));
@@ -40,48 +41,56 @@ export function MastersPage() {
   const statusMutation = useMutation({
     mutationFn: ({ item, value }: { item: Master; value: boolean }) => catalogApi.setMasterActive(kind, item.id, value),
     onSuccess: (item) => {
-      success(`${item.name} ${item.active ? "se activó" : "se desactivó"}.`);
+      success(copy.notices.toggled(item.name, item.active));
       void refresh();
     },
     onError: failure,
   });
 
-  const parentName = (id?: string) => items.data?.find((c) => c.id === id)?.name;
+  const parentName = (id?: string) => items.data?.find((c) => c.id === id)?.name ?? "";
 
   const columns: Column<Master>[] = [
     {
-      header: "Nombre",
+      header: copy.columns.name,
       skeleton: 50,
       cell: (item) => (
         <div>
           <p className="font-medium text-ink">{item.name}</p>
-          {item.parentId && <p className="text-caption text-ink-muted">Dentro de {parentName(item.parentId)}</p>}
+          {item.parentId && <p className="text-caption text-ink-muted">{copy.inside(parentName(item.parentId))}</p>}
         </div>
       ),
     },
-    ...(config.hasAbbrev ? [{ header: "Abreviatura", skeleton: 20, cell: (item: Master) => <span className="font-mono text-label">{item.abbreviation}</span> }] : []),
-    { header: "Productos", className: "text-right", skeleton: 15, cell: (item) => <span className="tabular font-mono text-label">{item.productCount}</span> },
+    ...(config.hasAbbrev
+      ? [{ header: copy.columns.abbreviation, skeleton: 20, cell: (item: Master) => <span className="font-mono text-label">{item.abbreviation}</span> }]
+      : []),
+    { header: copy.columns.products, className: "text-right", skeleton: 15, cell: (item) => <span className="tabular font-mono text-label">{item.productCount}</span> },
     ...(config.hasActive
-      ? [{ header: "Estado", skeleton: 20, cell: (item: Master) => (item.active ? <Badge tone="success">Activa</Badge> : <Badge>Inactiva</Badge>) }]
+      ? [
+          {
+            header: copy.columns.status,
+            skeleton: 20,
+            cell: (item: Master) => (item.active ? <Badge tone="success">{copy.status.active}</Badge> : <Badge>{copy.status.inactive}</Badge>),
+          },
+        ]
       : []),
     {
-      header: <span className="sr-only">Acciones</span>,
+      header: <span className="sr-only">{copy.columns.actions}</span>,
       className: "w-px px-2",
       skeleton: 0,
       cell: (item) => (
         <RowActions>
           {can(me, "categories:update") && (
-            <Button variant="ghost" size="icon-sm" aria-label={`Editar ${item.name}`} onClick={() => setSheet({ open: true, item })}>
+            <Button variant="ghost" size="icon-sm" aria-label={copy.editItem(item.name)} onClick={() => setSheet({ open: true, item })}>
               <PencilSimple size={16} />
             </Button>
           )}
           {config.hasActive && can(me, "categories:delete") && (item.active ? (
-            <ConfirmButton size="sm" confirmLabel="¿Confirmar?" onConfirm={() => statusMutation.mutate({ item, value: false })}>
-              Desactivar
+            <ConfirmButton size="sm" confirmLabel={copy.actions.confirm} onConfirm={() => statusMutation.mutate({ item, value: false })}>
+              {copy.actions.deactivate}
             </ConfirmButton>
           ) : (
             <Button variant="ghost" size="sm" onClick={() => statusMutation.mutate({ item, value: true })}>
-              Activar
+              {copy.actions.activate}
             </Button>
           ))}
         </RowActions>
@@ -92,19 +101,19 @@ export function MastersPage() {
   return (
     <>
       <PageHeader
-        title="Categorías, marcas y unidades"
-        description="Clasificación del catálogo. Desactivar una categoría o marca la oculta al crear productos, sin afectar los existentes."
+        title={copy.title}
+        description={copy.description}
         actions={
           can(me, "categories:create") && (
             <Button variant="primary" onClick={() => setSheet({ open: true, item: null })}>
               <Plus size={16} weight="bold" aria-hidden />
-              Nueva {config.singular}
+              {copy.create(config.singular)}
             </Button>
           )
         }
       />
       <div className="space-y-4 px-8 pb-10">
-        <FilterChips label="Tipo" value={kind} options={TABS} onChange={setKind} />
+        <FilterChips label={copy.kindFilter} value={kind} options={TABS} onChange={setKind} />
         <NoticeBanner notice={notice} />
         <DataTable
           columns={columns}
@@ -113,12 +122,16 @@ export function MastersPage() {
           loading={items.isPending}
           error={items.isError}
           onRetry={() => items.refetch()}
-          empty={{ title: "Sin registros", body: `Agrega la primera ${config.singular}.` }}
+          empty={copy.empty(config.singular)}
           minWidth={560}
         />
       </div>
 
-      <Sheet open={sheet.open} onClose={() => setSheet({ open: false, item: null })} title={sheet.item ? `Editar ${config.singular}` : `Nueva ${config.singular}`}>
+      <Sheet
+        open={sheet.open}
+        onClose={() => setSheet({ open: false, item: null })}
+        title={sheet.item ? copy.edit(config.singular) : copy.create(config.singular)}
+      >
         <MasterForm
           key={`${kind}-${sheet.item?.id ?? "new"}`}
           kind={kind}
@@ -127,7 +140,7 @@ export function MastersPage() {
           onCancel={() => setSheet({ open: false, item: null })}
           onSaved={(saved) => {
             setSheet({ open: false, item: null });
-            success(`${saved.name} se guardó.`);
+            success(copy.notices.saved(saved.name));
             void refresh();
           }}
         />
@@ -167,18 +180,26 @@ function MasterForm({ kind, item, categories, onCancel, onSaved }: MasterFormPro
   return (
     <form onSubmit={submit} noValidate className="space-y-5">
       {formError && <Alert>{formError}</Alert>}
-      <Field label="Nombre" error={errors.name?.message}>
-        <Input autoFocus {...form.register("name", { required: "Este campo es obligatorio.", minLength: { value: 2, message: "Escribe al menos 2 caracteres." } })} />
+      <Field label={copy.form.name} error={errors.name?.message}>
+        <Input
+          autoFocus
+          placeholder={config.namePlaceholder}
+          {...form.register("name", { required: copy.validation.required, minLength: { value: 2, message: copy.validation.minName } })}
+        />
       </Field>
       {config.hasAbbrev && (
-        <Field label="Abreviatura" error={errors.abbreviation?.message}>
-          <Input className="font-mono" {...form.register("abbreviation", { required: "Este campo es obligatorio." })} />
+        <Field label={copy.form.abbreviation} error={errors.abbreviation?.message}>
+          <Input
+            className="font-mono"
+            placeholder={copy.form.abbreviationPlaceholder}
+            {...form.register("abbreviation", { required: copy.validation.required })}
+          />
         </Field>
       )}
       {config.hasParent && (
-        <Field label="Categoría superior" hint="Opcional: para agrupar, por ejemplo Vino dentro de Bebidas." error={errors.parentId?.message}>
+        <Field label={copy.form.parent} hint={copy.form.parentHint} error={errors.parentId?.message}>
           <select className={inputClassName} {...form.register("parentId")}>
-            <option value="">Ninguna</option>
+            <option value="">{copy.form.noParent}</option>
             {categories.filter((c) => c.id !== item?.id && c.active).map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name}
@@ -189,10 +210,10 @@ function MasterForm({ kind, item, categories, onCancel, onSaved }: MasterFormPro
       )}
       <div className="flex justify-end gap-2 border-t border-line pt-5">
         <Button variant="ghost" onClick={onCancel}>
-          Cancelar
+          {copy.form.cancel}
         </Button>
         <Button type="submit" variant="primary" loading={isSubmitting}>
-          Guardar
+          {copy.form.save}
         </Button>
       </div>
     </form>
