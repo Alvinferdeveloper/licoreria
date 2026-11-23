@@ -387,6 +387,12 @@ func (h *history) saleTimes(day time.Time) []time.Time {
 		}
 	}
 	slices.SortFunc(moments, func(a, b time.Time) int { return a.Compare(b) })
+	// No two sales share a second, so the kardex order by time is unambiguous across registers.
+	for i := 1; i < len(moments); i++ {
+		if !moments[i].After(moments[i-1]) {
+			moments[i] = moments[i-1].Add(time.Second)
+		}
+	}
 	return moments
 }
 
