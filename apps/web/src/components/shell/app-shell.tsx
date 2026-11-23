@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
+import { Logo } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
 import { can } from "@/features/auth/api";
 import { logout, useSession } from "@/features/auth/session-store";
@@ -84,7 +85,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="grid min-h-dvh grid-cols-1 md:grid-cols-[232px_minmax(0,1fr)]">
       <aside className="flex flex-col border-r border-line bg-chrome md:sticky md:top-0 md:h-dvh">
         <div className="flex h-13 items-center justify-between px-4">
-          <span className="text-title font-semibold tracking-headline">Añejo</span>
+          <Logo />
           <ThemeToggle lightLabel="Usar tema claro" darkLabel="Usar tema oscuro" />
         </div>
 

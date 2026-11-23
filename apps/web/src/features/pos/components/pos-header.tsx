@@ -1,4 +1,5 @@
 import { CashRegister } from "@phosphor-icons/react/dist/ssr";
+import { Logo } from "@/components/brand/logo";
 import { ThemeToggle } from "@/features/theme";
 import { formatRate } from "@/lib/money";
 import { posCopy } from "../copy";
@@ -9,8 +10,8 @@ import { PosUserMenu } from "./pos-user-menu";
 export function PosHeader({ session }: { session: PosSession }) {
   return (
     <header className="flex h-13 items-center gap-6 border-b border-line bg-chrome px-5">
-      <div className="flex items-baseline gap-3">
-        <span className="text-title font-semibold tracking-headline">Añejo</span>
+      <div className="flex items-center gap-3">
+        <Logo />
         <span className="hidden text-label text-ink-muted sm:inline">{session.storeName}</span>
       </div>
 

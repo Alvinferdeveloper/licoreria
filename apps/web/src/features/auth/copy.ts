@@ -1,5 +1,4 @@
 export const authCopy = {
-  brand: "Añejo",
   tagline: "Punto de venta e inventario",
   login: {
     title: "Inicia sesión",
