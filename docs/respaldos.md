@@ -15,7 +15,7 @@ Un respaldo contiene hashes de contraseñas y datos de clientes: trátalo como i
 ## Tipos de respaldo
 
 - **Manual:** botón **Crear respaldo**.
-- **Automático:** cada día a las 2:00 a. m. (hora de Managua). Si el servidor estaba apagado, se genera al encenderlo. Conserva 7 diarios y 4 semanales; se ajusta con la clave `backups` de la tabla `settings`.
+- **Automático:** cada día a la hora programada (por defecto 2:00 a. m., hora de Managua). Si el servidor estaba apagado, se genera al encenderlo. Conserva 7 diarios y 4 semanales por defecto. El administrador cambia la hora y la retención en **Respaldos → Respaldo automático → Cambiar**; si reduce la retención, los sobrantes se borran en el siguiente respaldo automático.
 - **Antes de restaurar:** se crea solo, justo antes de cada restauración, y no se borra de forma automática.
 
 Los archivos quedan en el volumen `backup-data`. Para tener una copia fuera del servidor hay dos opciones:

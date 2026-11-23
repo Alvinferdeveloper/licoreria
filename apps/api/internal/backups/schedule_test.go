@@ -27,9 +27,15 @@ func TestIsDue(t *testing.T) {
 		{"failed less than an hour ago", failedRecently.Add(30 * time.Minute), &yesterday, &failedRecently, false},
 	}
 	for _, c := range cases {
-		if got := isDue(c.now, c.done, c.attempt); got != c.want {
+		if got := isDue(c.now, 2, c.done, c.attempt); got != c.want {
 			t.Errorf("%s: got %v, want %v", c.name, got, c.want)
 		}
+	}
+
+	// With an 8 p.m. slot, last night's backup covers the day until 20:00.
+	lastNight := at(4, 21)
+	if isDue(at(5, 10), 20, &lastNight, &lastNight) || !isDue(at(5, 21), 20, &lastNight, &lastNight) {
+		t.Error("a configured hour must move the daily slot")
 	}
 }
 

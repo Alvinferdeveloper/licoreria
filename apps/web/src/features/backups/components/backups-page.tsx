@@ -15,6 +15,7 @@ import { saveBlob } from "@/lib/api/client";
 import { formatDateTime, formatRelative } from "@/lib/format/date";
 import { backupKeys, backupsApi, type Backup } from "../api";
 import { backupsCopy as copy } from "../copy";
+import { PolicySheet } from "./policy-sheet";
 import { RestoreSheet } from "./restore-sheet";
 
 function formatSize(bytes: number | null) {
@@ -37,6 +38,7 @@ export function BackupsPage() {
   const [page, setPage] = useState(1);
   const [restoring, setRestoring] = useState<Backup | null>(null);
   const [result, setResult] = useState<Backup | null>(null);
+  const [editing, setEditing] = useState(false);
   const { notice, success, failure } = useNotice();
 
   const status = useQuery({ queryKey: backupKeys.status, queryFn: backupsApi.status });
@@ -128,7 +130,17 @@ export function BackupsPage() {
       <div className="space-y-6 px-8 pb-10">
         <dl className="grid divide-line rounded-lg border border-line bg-surface sm:grid-cols-2 sm:divide-x xl:grid-cols-4">
           <Fact label={copy.summary.last}>{latest ? formatRelative(latest.createdAt) : page === 1 && rows ? copy.summary.none : "—"}</Fact>
-          <Fact label={copy.summary.automatic}>
+          <Fact
+            label={copy.summary.automatic}
+            action={
+              canRestore &&
+              status.data && (
+                <button type="button" className="text-caption font-medium text-amber-ink hover:underline" onClick={() => setEditing(true)}>
+                  {copy.summary.edit}
+                </button>
+              )
+            }
+          >
             {status.data ? copy.summary.schedule(status.data.scheduleHour, status.data.dailyRetention, status.data.weeklyRetention) : "—"}
           </Fact>
           <Fact label={copy.summary.offsite} warn={status.data && !status.data.offsite}>
@@ -142,14 +154,26 @@ export function BackupsPage() {
       </div>
       <RestoreSheet backup={restoring} onClose={() => setRestoring(null)} />
       <DrillSheet backup={result} onClose={() => setResult(null)} />
+      <PolicySheet
+        status={editing && status.data ? status.data : null}
+        onClose={() => setEditing(false)}
+        onSaved={() => {
+          setEditing(false);
+          success(copy.policy.saved);
+          void refresh();
+        }}
+      />
     </>
   );
 }
 
-function Fact({ label, warn, children }: { label: string; warn?: boolean; children: React.ReactNode }) {
+function Fact({ label, warn, action, children }: { label: string; warn?: boolean; action?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="px-5 py-4">
-      <dt className="text-caption text-ink-muted">{label}</dt>
+      <div className="flex items-baseline justify-between gap-3">
+        <dt className="text-caption text-ink-muted">{label}</dt>
+        {action}
+      </div>
       <dd className={warn ? "mt-1 text-label text-warning" : "mt-1 text-label"}>{children}</dd>
     </div>
   );

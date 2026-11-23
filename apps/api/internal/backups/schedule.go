@@ -9,20 +9,28 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
+	"licoreria/api/internal/apperr"
+	"licoreria/api/internal/audit"
 	"licoreria/api/internal/mail"
+	"licoreria/api/internal/platform/database"
 	"licoreria/api/internal/platform/pdfx"
 	"licoreria/api/internal/settings"
 )
 
 const (
-	scheduleHour  = 2
 	checkInterval = 15 * time.Minute
 	retryAfter    = time.Hour
 )
 
+// ErrInvalidPolicy rejects a schedule hour or retention outside what the scheduler supports.
+var ErrInvalidPolicy = apperr.Validation(
+	apperr.FieldError{Field: "hour", Code: "range", Message: "La hora va de 0 a 23; se conservan de 1 a 30 diarios y de 0 a 12 semanales."},
+)
+
 // RunScheduler takes the daily backup and applies retention until ctx ends. Checking on an
-// interval, instead of waiting for the exact hour, also covers a server that was off at 02:00.
+// interval, instead of waiting for the exact hour, also covers a server that was off at that hour.
 func (s *Service) RunScheduler(ctx context.Context) {
 	if _, err := s.pool.Exec(ctx, `UPDATE backups SET status = $1, error = 'interrupted', completed_at = now() WHERE status = $2`, statusFailed, statusRunning); err != nil {
 		s.logger.ErrorContext(ctx, "close interrupted backups", "error", err)
@@ -47,13 +55,17 @@ func (s *Service) runDue(ctx context.Context) error {
 	}
 	defer s.mu.Unlock()
 
+	policy, err := settings.GetBackups(ctx, s.pool)
+	if err != nil {
+		return err
+	}
 	var lastDone, lastTry *time.Time
 	if err := s.pool.QueryRow(ctx, `
 		SELECT max(created_at) FILTER (WHERE status = $2), max(created_at)
 		FROM backups WHERE kind = $1`, KindScheduled, statusCompleted).Scan(&lastDone, &lastTry); err != nil {
 		return fmt.Errorf("load last scheduled backup: %w", err)
 	}
-	if !isDue(s.now(), lastDone, lastTry) {
+	if !isDue(s.now(), policy.Hour, lastDone, lastTry) {
 		return nil
 	}
 	if _, err := s.create(ctx, KindScheduled, nil); err != nil {
@@ -63,7 +75,25 @@ func (s *Service) runDue(ctx context.Context) error {
 		}
 		return err
 	}
-	return s.prune(ctx)
+	return s.prune(ctx, policy)
+}
+
+// SetPolicy changes the backup hour and retention; the new retention applies on the next scheduled run.
+func (s *Service) SetPolicy(ctx context.Context, actor uuid.UUID, p settings.Backups) (settings.Backups, error) {
+	if p.Hour < 0 || p.Hour > 23 || p.DailyRetention < 1 || p.DailyRetention > 30 || p.WeeklyRetention < 0 || p.WeeklyRetention > 12 {
+		return settings.Backups{}, ErrInvalidPolicy
+	}
+	err := database.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
+		before, err := settings.GetBackups(ctx, tx)
+		if err != nil {
+			return err
+		}
+		if err := settings.Set(ctx, tx, "backups", p, actor); err != nil {
+			return err
+		}
+		return audit.Record(ctx, tx, audit.Entry{UserID: &actor, Action: "backups.policy_changed", Entity: "settings", Before: before, After: p})
+	})
+	return p, err
 }
 
 func (s *Service) alertFailure(ctx context.Context) {
@@ -80,9 +110,9 @@ func (s *Service) alertFailure(ctx context.Context) {
 }
 
 // isDue is true once today's slot has passed without a completed backup, spacing out retries.
-func isDue(now time.Time, lastDone, lastTry *time.Time) bool {
+func isDue(now time.Time, hour int, lastDone, lastTry *time.Time) bool {
 	local := now.In(pdfx.Store)
-	slot := time.Date(local.Year(), local.Month(), local.Day(), scheduleHour, 0, 0, 0, pdfx.Store)
+	slot := time.Date(local.Year(), local.Month(), local.Day(), hour, 0, 0, 0, pdfx.Store)
 	if local.Before(slot) {
 		slot = slot.AddDate(0, 0, -1)
 	}
@@ -120,11 +150,7 @@ func expired(items []retained, daily, weekly int) []uuid.UUID {
 	return drop
 }
 
-func (s *Service) prune(ctx context.Context) error {
-	policy, err := settings.GetBackups(ctx, s.pool)
-	if err != nil {
-		return err
-	}
+func (s *Service) prune(ctx context.Context, policy settings.Backups) error {
 	rows, err := s.pool.Query(ctx, `SELECT id, created_at FROM backups WHERE kind = $1 AND status = $2`, KindScheduled, statusCompleted)
 	if err != nil {
 		return fmt.Errorf("list scheduled backups: %w", err)

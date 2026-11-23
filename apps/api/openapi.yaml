@@ -1071,6 +1071,27 @@ paths:
           description: Estado
           content: { application/json: { schema: { $ref: '#/components/schemas/BackupStatus' } } }
         default: { $ref: '#/components/responses/Error' }
+  /backups/policy:
+    put:
+      tags: [Respaldos]
+      summary: Cambiar hora y retención del respaldo automático
+      description: 'Permiso: `backups:authorize`. La nueva retención se aplica en el siguiente respaldo automático.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [scheduleHour, dailyRetention, weeklyRetention]
+              properties:
+                scheduleHour: { type: integer, minimum: 0, maximum: 23 }
+                dailyRetention: { type: integer, minimum: 1, maximum: 30 }
+                weeklyRetention: { type: integer, minimum: 0, maximum: 12 }
+      responses:
+        '200':
+          description: Programación guardada
+          content: { application/json: { schema: { $ref: '#/components/schemas/BackupStatus' } } }
+        default: { $ref: '#/components/responses/Error' }
   /backups/{id}/file:
     parameters:
       - { $ref: '#/components/parameters/Id' }

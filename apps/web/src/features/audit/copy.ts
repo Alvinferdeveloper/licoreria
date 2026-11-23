@@ -111,6 +111,7 @@ export const auditCopy = {
     "backups.created": "Creó un respaldo",
     "backups.downloaded": "Descargó un respaldo",
     "backups.verified": "Verificó un respaldo",
+    "backups.policy_changed": "Cambió la hora o retención del respaldo automático",
     "backups.restored": "Restauró un respaldo",
     "backups.restore_failed": "Falló una restauración",
     "backups.restore_denied": "Restauración rechazada por contraseña",

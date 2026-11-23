@@ -26,6 +26,7 @@ func (h *Handler) Routes(r chi.Router) {
 	r.Route("/backups", func(r chi.Router) {
 		r.With(auth.Require("backups", "view")).Get("/", h.list)
 		r.With(auth.Require("backups", "view")).Get("/status", h.status)
+		r.With(auth.Require("backups", "authorize")).Put("/policy", h.setPolicy)
 		r.With(auth.Require("backups", "create"), longRunning).Post("/", h.create)
 		r.With(auth.Require("backups", "create"), longRunning).Get("/{id}/file", h.download)
 		r.With(auth.Require("backups", "create"), longRunning).Post("/{id}/verify", h.verify)
@@ -63,10 +64,35 @@ func (h *Handler) status(w http.ResponseWriter, r *http.Request) {
 		httpx.Fail(w, r, err)
 		return
 	}
-	httpx.JSON(w, r, http.StatusOK, map[string]any{
-		"offsite": h.svc.Offsite(), "scheduleHour": scheduleHour,
+	httpx.JSON(w, r, http.StatusOK, h.statusBody(policy))
+}
+
+func (h *Handler) statusBody(policy settings.Backups) map[string]any {
+	return map[string]any{
+		"offsite": h.svc.Offsite(), "scheduleHour": policy.Hour,
 		"dailyRetention": policy.DailyRetention, "weeklyRetention": policy.WeeklyRetention,
-	})
+	}
+}
+
+type policyRequest struct {
+	ScheduleHour    int `json:"scheduleHour" validate:"gte=0,lte=23"`
+	DailyRetention  int `json:"dailyRetention" validate:"gte=1,lte=30"`
+	WeeklyRetention int `json:"weeklyRetention" validate:"gte=0,lte=12"`
+}
+
+func (h *Handler) setPolicy(w http.ResponseWriter, r *http.Request) {
+	var req policyRequest
+	if err := httpx.Bind(w, r, &req); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	actor, _ := auth.FromContext(r.Context())
+	policy, err := h.svc.SetPolicy(r.Context(), actor.UserID, settings.Backups{Hour: req.ScheduleHour, DailyRetention: req.DailyRetention, WeeklyRetention: req.WeeklyRetention})
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	httpx.JSON(w, r, http.StatusOK, h.statusBody(policy))
 }
 
 func (h *Handler) create(w http.ResponseWriter, r *http.Request) {

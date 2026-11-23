@@ -62,13 +62,14 @@ type POS struct {
 
 var DefaultPOS = POS{DiscountLimitPercent: 5, DefaultPrintFormat: "ticket"}
 
-// Backups sets how many scheduled backups are kept.
+// Backups sets when the daily backup runs (store hour, 0-23) and how many are kept.
 type Backups struct {
+	Hour            int `json:"hour"`
 	DailyRetention  int `json:"dailyRetention"`
 	WeeklyRetention int `json:"weeklyRetention"`
 }
 
-var DefaultBackups = Backups{DailyRetention: 7, WeeklyRetention: 4}
+var DefaultBackups = Backups{Hour: 2, DailyRetention: 7, WeeklyRetention: 4}
 
 func GetBackups(ctx context.Context, db database.DBTX) (Backups, error) {
 	value := DefaultBackups

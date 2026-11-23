@@ -1,6 +1,25 @@
 import type { Backup } from "./api";
 
+/** 0 → "12:00 a. m.", 14 → "2:00 p. m." */
+export function formatHour(hour: number) {
+  return `${hour % 12 || 12}:00 ${hour < 12 ? "a. m." : "p. m."}`;
+}
+
 export const backupsCopy = {
+  policy: {
+    title: "Respaldo automático",
+    description: "El sistema crea un respaldo completo cada día a esta hora y borra los más viejos según lo que decidas conservar.",
+    hour: "Hora del respaldo",
+    hourHint: "Elige una hora con poca actividad. Si el servidor está apagado a esa hora, el respaldo se hace al encenderlo.",
+    daily: "Respaldos diarios a conservar",
+    dailyHint: "Los más recientes, uno por día. De 1 a 30.",
+    weekly: "Respaldos semanales a conservar",
+    weeklyHint: "Además de los diarios, uno por semana anterior. De 0 a 12.",
+    retentionNote: "Si reduces la cantidad, los sobrantes se borran en el próximo respaldo automático.",
+    save: "Guardar",
+    cancel: "Cancelar",
+    saved: "Programación de respaldos guardada.",
+  },
   title: "Respaldos",
   description: "Copias completas de la base de datos. Descárgalas para guardarlas fuera del servidor y verifícalas: un respaldo que nunca se probó no cuenta.",
   create: "Crear respaldo",
@@ -9,7 +28,8 @@ export const backupsCopy = {
     last: "Último respaldo",
     none: "Todavía no hay",
     automatic: "Respaldo automático",
-    schedule: (hour: number, daily: number, weekly: number) => `Cada día a las ${hour}:00 a. m. Conserva ${daily} diarios y ${weekly} semanales.`,
+    schedule: (hour: number, daily: number, weekly: number) => `Cada día a las ${formatHour(hour)} Conserva ${daily} diarios y ${weekly} semanales.`,
+    edit: "Cambiar",
     offsite: "Copia externa",
     offsiteOn: "Activa, en un bucket privado",
     offsiteOff: "Sin configurar. Los respaldos solo están en este servidor: descárgalos.",
@@ -29,7 +49,7 @@ export const backupsCopy = {
     offsite: "Copia externa",
   },
   actions: { verify: "Verificar", result: "Ver resultado", download: "Descargar", restore: "Restaurar" },
-  empty: { title: "Todavía no hay respaldos", body: "Crea el primero. El automático se genera cada madrugada." },
+  empty: { title: "Todavía no hay respaldos", body: "Crea el primero. El automático se genera cada día a la hora programada." },
   drill: {
     title: "Resultado del simulacro",
     description: (when: string) => `Carga de prueba en una base temporal, sin tocar los datos reales: ${when}`,

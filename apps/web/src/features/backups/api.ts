@@ -45,6 +45,7 @@ export const backupKeys = {
 export const backupsApi = {
   list: (page: number) => api<Page<Backup>>("GET", `/backups?page=${page}&pageSize=15`),
   status: () => api<BackupStatus>("GET", "/backups/status"),
+  setPolicy: (body: Omit<BackupStatus, "offsite">) => api<BackupStatus>("PUT", "/backups/policy", { body }),
   create: () => api<Backup>("POST", "/backups"),
   verify: (id: string) => api<Backup>("POST", `/backups/${id}/verify`),
   download: (id: string) => apiBlob(`/backups/${id}/file`),
