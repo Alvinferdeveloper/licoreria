@@ -4,7 +4,7 @@ import { Barcode, MagnifyingGlass, WarningCircle } from "@phosphor-icons/react";
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useDeferredValue, useEffect, useMemo, useState, type KeyboardEvent } from "react";
 import { Kbd } from "@/components/ui/kbd";
-import { catalogApi, catalogKeys } from "@/features/catalog/api";
+import { catalogApi, catalogKeys, type Product as CatalogProduct } from "@/features/catalog/api";
 import { ApiError } from "@/lib/api/client";
 import { cn } from "@/lib/cn";
 import { posCopy } from "../copy";
@@ -14,6 +14,7 @@ import { POS_SEARCH_INPUT_ID } from "../hooks/search-focus";
 import { findByCode, searchCatalog, useCachedCatalog } from "../offline/catalog-cache";
 import { isNetworkError, useConnectivity } from "../offline/connectivity";
 import { usePosStore } from "../store/pos-store";
+import { CameraScanner, type ScanOutcome } from "./camera-scanner";
 import { CategoryFilter } from "./category-filter";
 import { ProductRow } from "./product-row";
 
@@ -37,6 +38,7 @@ export function ProductSearch({ locked }: ProductSearchProps) {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<string | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
+  const [cameraOpen, setCameraOpen] = useState(false);
   const deferredQuery = useDeferredValue(query);
 
   const online = useConnectivity((s) => s.online);
@@ -76,36 +78,48 @@ export function ProductSearch({ locked }: ProductSearchProps) {
     if (addToCart(product, presentation)) {
       setQuery("");
       setActiveIndex(0);
-    } else {
-      setNotice(posCopy.search.noMoreStock(product.name));
+      return true;
     }
+    setNotice(posCopy.search.noMoreStock(product.name));
+    return false;
   };
 
-  const addScannedLocally = (code: string) => {
+  const addFound = (product: CatalogProduct, presentationId: string | null): ScanOutcome => {
+    const pos = toPosProduct(product);
+    const presentation = pos.presentations.find((p) => p.id === presentationId) ?? null;
+    return select(pos, presentation)
+      ? { added: presentation ? `${pos.name} · ${presentation.name}` : pos.name }
+      : { failed: posCopy.search.noMoreStock(pos.name) };
+  };
+
+  const scanLocally = (code: string): ScanOutcome | null => {
     const found = cached && findByCode(cached.products, code);
-    if (!found) return false;
-    const pos = toPosProduct(found.product);
-    select(pos, pos.presentations.find((p) => p.id === found.presentationId) ?? null);
-    return true;
+    return found ? addFound(found.product, found.presentationId) : null;
+  };
+
+  /** Adds the product with this barcode or SKU; null when no product has it. */
+  const scan = async (code: string): Promise<ScanOutcome | null> => {
+    if (!online) return scanLocally(code);
+    try {
+      const { product, presentationId } = await catalogApi.lookup(code);
+      return addFound(product, presentationId);
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) return null;
+      if (isNetworkError(error)) {
+        setOnline(false);
+        return scanLocally(code);
+      }
+      return { failed: error instanceof ApiError ? error.message : posCopy.search.notFound(code) };
+    }
   };
 
   const addScanned = async (code: string) => {
-    if (!online) return addScannedLocally(code);
-    try {
-      const { product, presentationId } = await catalogApi.lookup(code);
-      const pos = toPosProduct(product);
-      select(pos, pos.presentations.find((p) => p.id === presentationId) ?? null);
-      return true;
-    } catch (error) {
-      if (error instanceof ApiError && error.status === 404) return false;
-      if (isNetworkError(error)) {
-        setOnline(false);
-        return addScannedLocally(code);
-      }
-      setNotice(error instanceof ApiError ? error.message : posCopy.search.notFound(code));
-      return true;
-    }
+    const outcome = await scan(code);
+    if (outcome && "failed" in outcome) setNotice(outcome.failed);
+    return outcome !== null;
   };
+
+  const scanFromCamera = async (code: string): Promise<ScanOutcome> => (await scan(code)) ?? { failed: posCopy.search.notFound(code) };
 
   const onKeyDown = async (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -159,11 +173,28 @@ export function ProductSearch({ locked }: ProductSearchProps) {
           onKeyDown={onKeyDown}
           className="h-13 w-full rounded-lg border border-field bg-surface pr-24 pl-12 text-body-lg text-ink transition-[border-color,box-shadow] duration-150 placeholder:text-ink-subtle focus:border-amber focus:shadow-[0_0_0_3px_color-mix(in_oklch,var(--amber)_25%,transparent)] focus:outline-none"
         />
-        <span className="pointer-events-none absolute top-1/2 right-4 flex -translate-y-1/2 items-center gap-2 text-ink-subtle">
-          <Barcode size={18} aria-hidden />
-          <Kbd>{posCopy.shortcuts.search}</Kbd>
+        <span className="absolute top-1/2 right-3 flex -translate-y-1/2 items-center gap-1.5 text-ink-subtle">
+          <button
+            type="button"
+            onClick={() => setCameraOpen(true)}
+            aria-label={posCopy.camera.open}
+            title={posCopy.camera.open}
+            className="press grid size-9 place-items-center rounded-md transition-colors duration-150 hover:bg-chrome hover:text-ink focus-visible:outline-2 focus-visible:outline-amber"
+          >
+            <Barcode size={20} aria-hidden />
+          </button>
+          <Kbd className="pointer-events-none">{posCopy.shortcuts.search}</Kbd>
         </span>
       </div>
+
+      <CameraScanner
+        open={cameraOpen}
+        onClose={() => {
+          setCameraOpen(false);
+          requestAnimationFrame(() => document.getElementById(POS_SEARCH_INPUT_ID)?.focus());
+        }}
+        onCode={scanFromCamera}
+      />
 
       <div className="flex items-center justify-between gap-4">
         <CategoryFilter

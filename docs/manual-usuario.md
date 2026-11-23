@@ -47,6 +47,8 @@ Abre **Vender > Punto de venta**. Todo el flujo se puede hacer solo con teclado:
 **Paso a paso:**
 
 1. Escanea el código de barras o busca por nombre, marca o SKU. La búsqueda ignora acentos.
+   - **Con lector:** un lector USB o Bluetooth funciona sin configurar nada; el producto entra directo a la cuenta.
+   - **Con la cámara:** pulsa el icono de código de barras del buscador. En teléfonos y tablets usa la cámara trasera y en laptops la webcam. Cada código leído suena y se agrega; la cámara sigue abierta para el siguiente. Pulsa **Listo** al terminar. El navegador solo permite la cámara en una dirección segura (https) o en el mismo equipo del servidor.
 2. Ajusta las cantidades en la cuenta.
 3. Si la factura va a nombre de alguien, elige el cliente o créalo ahí mismo. Por defecto es Consumidor final.
 4. Marca **Cliente mayor de 18 años verificado**. Es obligatorio.
