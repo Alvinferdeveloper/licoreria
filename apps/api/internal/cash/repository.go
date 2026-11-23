@@ -82,6 +82,19 @@ type Shift struct {
 	Notes         string     `json:"notes"`
 	Summary       *Summary   `json:"summary,omitempty"`
 	Movements     []Movement `json:"movements,omitempty"`
+	// NonCash lists card and transfer payments to reconcile with the bank's batch close.
+	NonCash []NonCashPayment `json:"nonCash,omitempty"`
+}
+
+type NonCashPayment struct {
+	SaleID    uuid.UUID `json:"saleId"`
+	Invoice   string    `json:"invoice"`
+	Method    string    `json:"method"`
+	Currency  string    `json:"currency"`
+	Amount    string    `json:"amount"`
+	AmountNIO string    `json:"amountNio"`
+	Reference *string   `json:"reference"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 type ShiftFilter struct {
@@ -245,6 +258,21 @@ func (repository) movements(ctx context.Context, db database.DBTX, shiftID uuid.
 		return nil, fmt.Errorf("list cash movements: %w", err)
 	}
 	var items []Movement
+	return items, json.Unmarshal(raw, &items)
+}
+
+func (repository) nonCash(ctx context.Context, db database.DBTX, shiftID uuid.UUID) ([]NonCashPayment, error) {
+	var raw []byte
+	err := db.QueryRow(ctx, `
+		SELECT COALESCE(json_agg(json_build_object('saleId', s.id, 'invoice', s.invoice_series || '-' || lpad(s.invoice_number::text, 6, '0'), 'method', p.method,
+		       'currency', p.currency_code, 'amount', p.amount::text, 'amountNio', p.amount_nio::text,
+		       'reference', p.reference, 'createdAt', s.created_at) ORDER BY p.method, s.created_at), '[]')
+		FROM sale_payments p JOIN sales s ON s.id = p.sale_id
+		WHERE s.shift_id = $1 AND s.status = 'completed' AND p.method <> 'cash'`, shiftID).Scan(&raw)
+	if err != nil {
+		return nil, fmt.Errorf("list non-cash payments: %w", err)
+	}
+	var items []NonCashPayment
 	return items, json.Unmarshal(raw, &items)
 }
 

@@ -1,7 +1,13 @@
+"use client";
+
+import { useState } from "react";
 import { Money } from "@/components/money";
+import { Button } from "@/components/ui/button";
+import { formatDateTime } from "@/lib/format/date";
 import { amountToCents, type CurrencyCode } from "@/lib/money";
 import { cn } from "@/lib/cn";
-import type { Shift, ShiftSummary } from "../api";
+import { paymentReference } from "@/features/sales/copy";
+import type { NonCashPayment, Shift, ShiftSummary } from "../api";
 import { cashCopy } from "../copy";
 
 const copy = cashCopy.shift;
@@ -46,7 +52,39 @@ export function ShiftBreakdown({ shift, summary }: { shift: Shift; summary: Shif
           {copy.transfer} <Money cents={amountToCents(summary.transferNio)} className="font-mono" />
         </span>
       </div>
+      {shift.nonCash && shift.nonCash.length > 0 && <NonCashList payments={shift.nonCash} />}
     </div>
+  );
+}
+
+function NonCashList({ payments }: { payments: NonCashPayment[] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="rounded-lg border border-line bg-surface">
+      <header className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
+        <div>
+          <h3 className="text-label font-semibold">{copy.nonCash.title}</h3>
+          <p className="text-caption text-ink-muted">{copy.nonCash.hint}</p>
+        </div>
+        <Button variant="ghost" size="sm" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+          {open ? copy.nonCash.hide : copy.nonCash.show(payments.length)}
+        </Button>
+      </header>
+      {open && (
+        <ul className="divide-y divide-line border-t border-line text-label">
+          {payments.map((p, i) => (
+            <li key={`${p.saleId}-${i}`} className="grid grid-cols-[6rem_1fr_auto] items-center gap-3 px-4 py-2">
+              <span className="text-ink-muted">{p.method === "card" ? copy.card : copy.transfer}</span>
+              <span className="min-w-0 truncate font-mono">
+                {p.reference ? paymentReference(p.method, p.reference) : <span className="text-ink-subtle">{copy.nonCash.noReference}</span>}
+                <span className="text-ink-subtle"> · {p.invoice} · {formatDateTime(p.createdAt)}</span>
+              </span>
+              <Money cents={amountToCents(p.amount)} currency={p.currency} className="font-mono" />
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

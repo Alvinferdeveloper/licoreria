@@ -19,7 +19,10 @@ import (
 	"licoreria/api/internal/settings"
 )
 
-var methodNames = map[string]string{"cash": "Efectivo", "card": "Tarjeta", "transfer": "Transferencia"}
+var (
+	methodNames    = map[string]string{"cash": "Efectivo", "card": "Tarjeta", "transfer": "Transferencia"}
+	referenceNames = map[string]string{"card": "aut.", "transfer": "ref."}
+)
 
 // money formats a decimal string as "C$ 1,250.50" or "US$ 20.00".
 func money(symbol, amount string) string {
@@ -178,6 +181,9 @@ func InvoicePDF(s Sale, b settings.Business, note string, logo *pdfx.Image) ([]b
 	m.AddRows(text.NewRow(6, "Pagos", withTop(pdfx.Text(8.5, true, false, align.Left, pdfx.Muted), 2)))
 	for _, p := range s.Payments {
 		label := methodNames[p.Method]
+		if p.Reference != nil && referenceNames[p.Method] != "" {
+			label += fmt.Sprintf(" · %s %s", referenceNames[p.Method], *p.Reference)
+		}
 		symbol := "C$"
 		if p.Currency == "USD" {
 			symbol = "US$"

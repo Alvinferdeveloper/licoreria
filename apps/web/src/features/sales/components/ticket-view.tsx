@@ -11,7 +11,7 @@ import { ApiError } from "@/lib/api/client";
 import { formatDateTime } from "@/lib/format/date";
 import { amountToCents, formatMoney, formatRate, nioToUsd } from "@/lib/money";
 import { salesApi, salesKeys, type Sale, type StoreSettings } from "../api";
-import { invoiceCopy } from "../copy";
+import { invoiceCopy, paymentReference, salesCopy } from "../copy";
 
 const copy = invoiceCopy.ticketView;
 type Width = "80" | "58";
@@ -106,10 +106,13 @@ function Ticket({ sale, store, width }: { sale: Sale; store: StoreSettings; widt
       {rate > 0 && <p className="text-right">{copy.usd(formatMoney(nioToUsd(amountToCents(sale.total), rate), "USD"))}</p>}
       <Rule />
       {sale.payments?.map((p, i) => (
-        <p key={i} className={row}>
-          <span>{copy.paid}</span>
-          <span>{formatMoney(amountToCents(p.amount), p.currency)}</span>
-        </p>
+        <div key={i}>
+          <p className={row}>
+            <span>{p.method === "cash" ? copy.paid : salesCopy.detail.methods[p.method]}</span>
+            <span>{formatMoney(amountToCents(p.amount), p.currency)}</span>
+          </p>
+          {p.reference && <p>{paymentReference(p.method, p.reference)}</p>}
+        </div>
       ))}
       <p className={row}><span>{copy.change}</span><span>{nio(sale.changeNio)}</span></p>
       {sale.payments?.some((p) => p.currency === "USD") && <p>{copy.rate(formatRate(rate))}</p>}

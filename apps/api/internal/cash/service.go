@@ -141,6 +141,9 @@ func (s *Service) detail(ctx context.Context, db database.DBTX, p auth.Principal
 	if shift.Movements, err = s.repo.movements(ctx, db, id); err != nil {
 		return Shift{}, err
 	}
+	if shift.NonCash, err = s.repo.nonCash(ctx, db, id); err != nil {
+		return Shift{}, err
+	}
 	return shift, nil
 }
 

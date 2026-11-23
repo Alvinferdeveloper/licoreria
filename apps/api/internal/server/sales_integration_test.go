@@ -2,7 +2,9 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -88,6 +90,22 @@ func TestSaleFlow(t *testing.T) {
 		t.Errorf("voiding must return the stock, got %d", stock())
 	}
 
+	// Card needs the voucher's authorization number, and the shift lists it for the bank's batch close.
+	card := map[string]any{
+		"ageVerified": true,
+		"lines":       []map[string]any{{"productId": productID, "quantity": 1}},
+		"payments":    []map[string]string{{"method": "card", "currency": "NIO", "amount": "115"}},
+	}
+	if res := cashier.sendJSON(http.MethodPost, "/sales", card, map[string]string{"Idempotency-Key": uuid.NewString()}); !strings.Contains(fmt.Sprint(res.body), "reference_required") {
+		t.Fatalf("card without authorization: %d %v", res.status, res.body)
+	}
+	card["payments"] = []map[string]string{{"method": "card", "currency": "NIO", "amount": "115", "reference": " 042817 "}}
+	expectStatus(t, cashier.sendJSON(http.MethodPost, "/sales", card, map[string]string{"Idempotency-Key": uuid.NewString()}), http.StatusCreated, "card sale")
+	shift := cashier.do(http.MethodGet, "/cash-shifts/current", nil)
+	if nonCash, _ := shift.body["nonCash"].([]any); len(nonCash) != 1 || nonCash[0].(map[string]any)["reference"] != "042817" {
+		t.Fatalf("shift should list the card authorization, got %v", shift.body["nonCash"])
+	}
+
 	// A sale made without connection is recorded even past the stock, and the admins hear about it.
 	offline := map[string]any{
 		"ageVerified": true,
@@ -97,8 +115,8 @@ func TestSaleFlow(t *testing.T) {
 	}
 	synced := cashier.sendJSON(http.MethodPost, "/sales", offline, map[string]string{"Idempotency-Key": uuid.NewString()})
 	expectStatus(t, synced, http.StatusCreated, "offline sale")
-	if synced.body["offlineAt"] == nil || stock() != -2 {
-		t.Fatalf("offline sale: offlineAt %v, stock %d (want -2)", synced.body["offlineAt"], stock())
+	if synced.body["offlineAt"] == nil || stock() != -3 {
+		t.Fatalf("offline sale: offlineAt %v, stock %d (want -3)", synced.body["offlineAt"], stock())
 	}
 	if env.countEmails("lucia@elbarril.ni", "Venta sin conexión dejó stock negativo") != 1 {
 		t.Error("an offline sale past the stock should alert the admins")

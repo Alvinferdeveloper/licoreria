@@ -60,6 +60,19 @@ export interface Shift {
   notes: string;
   summary?: ShiftSummary;
   movements?: CashMovement[];
+  nonCash?: NonCashPayment[];
+}
+
+/** Card or transfer payment of the shift, to match against the bank's batch close. */
+export interface NonCashPayment {
+  saleId: string;
+  invoice: string;
+  method: "card" | "transfer";
+  currency: Currency;
+  amount: string;
+  amountNio: string;
+  reference: string | null;
+  createdAt: string;
 }
 
 export interface Rate {

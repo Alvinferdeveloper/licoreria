@@ -116,7 +116,7 @@ export function toSaleInput(state: Pick<PosState, "lines" | "discount" | "custom
       : null,
     authorization,
     lines: state.lines.map((l) => ({ productId: l.productId, presentationId: l.presentationId, quantity: l.quantity })),
-    payments: state.payments.map((p) => ({ method: p.method, currency: p.currency, amount: toAmountString(p.amount), reference: null })),
+    payments: state.payments.map((p) => ({ method: p.method, currency: p.currency, amount: toAmountString(p.amount), reference: p.reference ?? null })),
   };
 }
 

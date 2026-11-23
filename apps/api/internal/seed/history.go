@@ -614,10 +614,10 @@ func (h *history) payments(total, rate int64) []sales.PaymentInput {
 		}
 		return []sales.PaymentInput{usd(dollars), nio(roundUp(total - covered))}
 	case pick < 93:
-		ref := fmt.Sprintf("Aut. %06d", h.rng.IntN(1_000_000))
+		ref := fmt.Sprintf("%06d", h.rng.IntN(1_000_000))
 		return []sales.PaymentInput{{Method: "card", Currency: "NIO", Amount: cents(total), Reference: &ref}}
 	default:
-		ref := fmt.Sprintf("TRF %08d", h.rng.IntN(100_000_000))
+		ref := fmt.Sprintf("%08d", h.rng.IntN(100_000_000))
 		return []sales.PaymentInput{{Method: "transfer", Currency: "NIO", Amount: cents(total), Reference: &ref}}
 	}
 }

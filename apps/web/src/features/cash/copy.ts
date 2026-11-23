@@ -35,6 +35,13 @@ export const cashCopy = {
     card: "Tarjeta",
     transfer: "Transferencia",
     sales: (n: number) => (n === 1 ? "1 venta" : `${n} ventas`),
+    nonCash: {
+      title: "Tarjeta y transferencias del turno",
+      hint: "Compara cada autorización con el cierre de lote del datáfono y las referencias con el estado de la cuenta.",
+      show: (n: number) => (n === 1 ? "Ver 1 cobro" : `Ver ${n} cobros`),
+      hide: "Ocultar",
+      noReference: "Sin número",
+    },
     movements: "Entradas y salidas de efectivo",
     noMovements: "Sin movimientos todavía.",
     addMovement: "Entrada o salida",

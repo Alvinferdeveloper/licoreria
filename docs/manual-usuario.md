@@ -58,7 +58,12 @@ Abre **Vender > Punto de venta**. Todo el flujo se puede hacer solo con teclado:
 
 **Ventas en espera.** `F8` guarda el carrito para atender a otro cliente. Retómalo desde **En espera**.
 
-**Tarjeta y transferencia** no pueden cobrar más que el saldo. Solo el efectivo genera vuelto.
+**Tarjeta y transferencia** no pueden cobrar más que el saldo. Solo el efectivo genera vuelto. El sistema nunca pide ni guarda datos de la tarjeta:
+
+- **Tarjeta:** cobra el monto en el datáfono del banco. El cliente inserta o acerca su tarjeta en el datáfono, que imprime un voucher. Escribe en el sistema el **número de autorización** del voucher.
+- **Transferencia:** el cliente transfiere desde la app de su banco. Confirma que llegó y escribe el **número de referencia**.
+
+Sin ese número no se registra el pago. Sale en el ticket, la factura y el detalle de la venta.
 
 **Sin conexión.** Si el punto de venta pierde la conexión con el servidor, aparece una franja ámbar y puedes seguir vendiendo:
 
@@ -78,6 +83,8 @@ Solo se puede anular mientras el turno de esa venta siga abierto. El sistema no 
 ## 5. Cerrar la caja
 
 En **Vender > Mi caja** el desglose muestra lo que debería haber por moneda. Para movimientos ajenos a las ventas, como pagar hielo o un flete, usa **Entrada o salida de efectivo**, siempre con motivo.
+
+Tarjeta y transferencia no están en la gaveta. Debajo del desglose, **Tarjeta y transferencias del turno** lista cada cobro con su autorización o referencia: compáralo con el cierre de lote del datáfono y con el estado de la cuenta.
 
 Al final del turno, pulsa **Cerrar caja** y escribe lo que contaste en cada moneda. El sistema calcula la diferencia. Si no cuadra, queda registrada y se avisa por correo a los supervisores.
 

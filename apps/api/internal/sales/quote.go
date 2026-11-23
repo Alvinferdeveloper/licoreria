@@ -1,6 +1,8 @@
 package sales
 
 import (
+	"strings"
+
 	"github.com/google/uuid"
 
 	"licoreria/api/internal/apperr"
@@ -10,6 +12,7 @@ var (
 	ErrDiscountTooLarge = apperr.Validation(apperr.FieldError{Field: "discount", Code: "exceeds_subtotal", Message: "El descuento no puede superar el subtotal."})
 	ErrNonCashOverpay   = apperr.Validation(apperr.FieldError{Field: "payments", Code: "non_cash_overpay", Message: "Tarjeta y transferencia no pueden cobrar más que el saldo."})
 	ErrUnderpaid        = apperr.Validation(apperr.FieldError{Field: "payments", Code: "underpaid", Message: "Lo pagado no cubre el total de la venta."})
+	ErrMissingReference = apperr.Validation(apperr.FieldError{Field: "payments", Code: "reference_required", Message: "Escribe el número de autorización del voucher o la referencia de la transferencia."})
 )
 
 // pricedLine is a cart line with its price and tax taken from the catalog, never the client.
@@ -100,13 +103,23 @@ func settle(total int64, payments []PaymentInput, rateMicros int64) ([]settledPa
 		if err != nil || cents == 0 {
 			return nil, 0, apperr.Validation(apperr.FieldError{Field: "payments", Code: "money", Message: "Cada pago debe tener un monto mayor que 0."})
 		}
+		var ref string
+		if p.Reference != nil {
+			ref = strings.TrimSpace(*p.Reference)
+		}
 		nio := cents
 		if p.Currency == "USD" {
 			nio = usdToNIO(cents, rateMicros)
 		}
 		paid += nio
+		p.Reference = nil
 		if p.Method != "cash" {
 			nonCash += nio
+			// Card and transfer are reconciled with the bank by this number.
+			if ref == "" {
+				return nil, 0, ErrMissingReference
+			}
+			p.Reference = &ref
 		}
 		settled = append(settled, settledPayment{PaymentInput: p, AmountCents: cents, AmountNIO: nio})
 	}

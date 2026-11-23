@@ -1,13 +1,15 @@
 "use client";
 
 import { ArrowLeft, CheckCircle, X } from "@phosphor-icons/react";
-import { useState, type FormEvent, type ReactNode } from "react";
+import { useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Money } from "@/components/money";
 import { Button } from "@/components/ui/button";
+import { Field, Input } from "@/components/ui/field";
 import { Kbd } from "@/components/ui/kbd";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import { paymentReference } from "@/features/sales/copy";
 import { cn } from "@/lib/cn";
-import { CURRENCIES, formatRate, nioToUsd, parseAmount, toCents, type CurrencyCode } from "@/lib/money";
+import { CURRENCIES, formatMoney, formatRate, nioToUsd, parseAmount, toCents, type CurrencyCode } from "@/lib/money";
 import { posCopy } from "../copy";
 import { amountDue, BILL_SHORTCUTS, paymentInBase, type PaymentMethod } from "../domain";
 import { useConnectivity } from "../offline/connectivity";
@@ -45,31 +47,56 @@ export function TenderView() {
   // Cards and transfers need the network; offline only cash is taken.
   const method: PaymentMethod = online ? chosenMethod : "cash";
   const [amountInput, setAmountInput] = useState("");
+  const [referenceInput, setReferenceInput] = useState("");
+  const [referenceMissing, setReferenceMissing] = useState(false);
+  const referenceRef = useRef<HTMLInputElement>(null);
 
+  const nonCash = method !== "cash";
+  const reference = referenceInput.trim();
   const due = amountDue(tender.remaining, currency, rate);
   const symbol = CURRENCIES[currency].symbol;
-  // A typed amount counts even before Enter: if it covers the sale, the confirm button takes it.
   const typed = parseAmount(amountInput);
-  const typedCovers = !tender.isCovered && typed !== null && typed > 0 && paymentInBase({ id: "", method, currency, amount: typed }, rate) >= tender.remaining;
-  const canConfirm = tender.isCovered || typedCovers;
+  // Card and transfer charge the balance unless another amount is typed; cash needs what was received.
+  const pending = typed ?? (nonCash ? due : null);
+  const covers = (amount: number | null) =>
+    amount !== null && amount > 0 && paymentInBase({ id: "", method, currency, amount }, rate) >= tender.remaining;
+  // A pending amount counts even before Enter: if it covers the sale, the confirm button takes it.
+  const pendingCovers = !tender.isCovered && covers(pending) && (!nonCash || reference !== "");
+  const canConfirm = tender.isCovered || pendingCovers;
+
+  const askReference = () => {
+    setReferenceMissing(true);
+    referenceRef.current?.focus();
+  };
+
+  const record = (amount: number) => {
+    addPayment({ method, currency, amount, ...(nonCash && { reference }) });
+    setAmountInput("");
+    setReferenceInput("");
+    setReferenceMissing(false);
+  };
 
   const confirm = () => {
-    if (typedCovers && typed) {
-      addPayment({ method, currency, amount: typed });
-      setAmountInput("");
-    }
+    if (pendingCovers && pending) record(pending);
     void confirmSale();
   };
 
   const pay = (amount: number) => {
-    addPayment({ method, currency, amount });
-    setAmountInput("");
+    if (nonCash && !reference) return askReference();
+    record(amount);
     document.getElementById(TENDER_INPUT_ID)?.focus();
+  };
+
+  const chooseMethod = (next: PaymentMethod) => {
+    setMethod(next);
+    setReferenceMissing(false);
+    if (next !== "cash") requestAnimationFrame(() => referenceRef.current?.focus());
   };
 
   const onSubmit = (event: FormEvent) => {
     event.preventDefault();
-    const amount = parseAmount(amountInput);
+    if (nonCash && !reference) return askReference();
+    const amount = typed ?? (nonCash ? due : null);
     if (amount) return pay(amount);
     if (!amountInput.trim() && tender.isCovered) void confirmSale();
   };
@@ -117,16 +144,19 @@ export function TenderView() {
 
         {!tender.isCovered && (
           <form onSubmit={onSubmit} className="space-y-3">
+            {/* With two inputs, Enter only submits when the form has a submit button. */}
+            <button type="submit" className="sr-only" tabIndex={-1} aria-hidden />
+
             <SegmentedControl label={posCopy.tender.currency} value={currency} options={CURRENCY_OPTIONS} onChange={setCurrency} />
             {online ? (
-              <SegmentedControl label={posCopy.tender.method} value={method} options={METHOD_OPTIONS} onChange={setMethod} />
+              <SegmentedControl label={posCopy.tender.method} value={method} options={METHOD_OPTIONS} onChange={chooseMethod} />
             ) : (
               <p className="rounded-md bg-amber-tint px-3 py-2 text-label text-amber-ink">{posCopy.offline.cashOnly}</p>
             )}
 
             <div className="space-y-1.5">
               <label htmlFor={TENDER_INPUT_ID} className="text-label font-medium">
-                {posCopy.tender.amountLabel}
+                {nonCash ? posCopy.tender.chargeLabel : posCopy.tender.amountLabel}
               </label>
               <div className="relative">
                 <span className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 font-mono text-ink-subtle">
@@ -143,9 +173,31 @@ export function TenderView() {
                   className="tabular h-13 w-full rounded-lg border border-field bg-surface pr-4 pl-14 text-right font-mono text-title text-ink placeholder:text-ink-subtle focus:border-amber focus:shadow-[0_0_0_3px_color-mix(in_oklch,var(--amber)_25%,transparent)] focus:outline-none"
                 />
               </div>
-              {method !== "cash" && <p className="text-caption text-ink-muted">{posCopy.tender.nonCashCapped}</p>}
-              {typed !== null && typed > 0 && !typedCovers && <p className="text-caption text-ink-muted">{posCopy.tender.partialHint}</p>}
+              {nonCash && <p className="text-caption text-ink-muted">{posCopy.tender.nonCashCapped}</p>}
+              {typed !== null && typed > 0 && !covers(typed) && <p className="text-caption text-ink-muted">{posCopy.tender.partialHint}</p>}
             </div>
+
+            {nonCash && (
+              <div className="space-y-2 rounded-lg border border-line bg-sunken p-3">
+                <p className="text-label text-ink">
+                  {posCopy.tender.reference[method].hint(formatMoney(Math.min(pending ?? due, due), currency))}
+                </p>
+                <Field
+                  label={posCopy.tender.reference[method].label}
+                  error={referenceMissing && !reference ? posCopy.tender.reference.missing : undefined}
+                >
+                  <Input
+                    ref={referenceRef}
+                    autoComplete="off"
+                    maxLength={60}
+                    value={referenceInput}
+                    onChange={(event) => setReferenceInput(event.target.value)}
+                    placeholder={posCopy.tender.reference[method].placeholder}
+                    className="font-mono tabular"
+                  />
+                </Field>
+              </div>
+            )}
 
             <div className="grid grid-cols-3 gap-2">
               {method === "cash" &&
@@ -169,6 +221,7 @@ export function TenderView() {
                 <li key={payment.id} className="flex items-center gap-3 py-2 pr-2 pl-4">
                   <span className="flex-1 text-label">
                     {posCopy.tender.methods[payment.method]} · {CURRENCIES[payment.currency].symbol}
+                    {payment.reference && <span className="block font-mono text-caption text-ink-muted">{paymentReference(payment.method, payment.reference)}</span>}
                   </span>
                   <span className="text-right">
                     <Money cents={payment.amount} currency={payment.currency} className="block font-mono font-medium" />

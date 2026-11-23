@@ -20,7 +20,7 @@ import { cn } from "@/lib/cn";
 import { formatDateTime } from "@/lib/format/date";
 import { amountToCents, formatRate } from "@/lib/money";
 import { salesApi, salesKeys, type Authorization, type Sale, type SaleFilters } from "../api";
-import { salesCopy as copy } from "../copy";
+import { salesCopy as copy, paymentReference } from "../copy";
 import { InvoiceActions } from "./invoice-actions";
 
 export function SalesPage() {
@@ -145,6 +145,7 @@ function SaleDetail({ sale, onVoided }: { sale: Sale; onVoided: (s: Sale) => voi
             <li key={i} className={row}>
               <span className="text-ink-muted">
                 {d.methods[p.method]} · {p.currency === "USD" ? `US$ · ${d.rate(formatRate(Number(p.exchangeRate)))}` : "C$"}
+                {p.reference && <span className="font-mono"> · {paymentReference(p.method, p.reference)}</span>}
               </span>
               <Money cents={amountToCents(p.amount)} currency={p.currency} className="font-mono" />
             </li>

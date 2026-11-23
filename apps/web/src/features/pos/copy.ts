@@ -53,6 +53,7 @@ export const posCopy = {
     method: "Método",
     methods: { cash: "Efectivo", card: "Tarjeta", transfer: "Transferencia" },
     amountLabel: "Monto recibido",
+    chargeLabel: "Monto a cobrar",
     exact: "Exacto",
     add: "Agregar pago",
     payments: "Pagos",
@@ -65,6 +66,19 @@ export const posCopy = {
     saving: "Registrando…",
     nonCashCapped: "Tarjeta y transferencia cobran solo el saldo pendiente.",
     partialHint: "No cubre el total: pulsa Enter para agregarlo como pago parcial y completa con otro.",
+    reference: {
+      card: {
+        label: "N.º de autorización",
+        placeholder: "Ej. 042817",
+        hint: (amount: string) => `Cobra ${amount} en el datáfono y escribe el número de autorización del voucher.`,
+      },
+      transfer: {
+        label: "N.º de referencia",
+        placeholder: "Ej. 20481173",
+        hint: (amount: string) => `Confirma en la app del banco que llegaron ${amount} y escribe el número de referencia.`,
+      },
+      missing: "Escribe el número para registrar el pago.",
+    },
     authorization: {
       title: "Autorización de un administrador",
       body: "El descuento supera tu límite. Un administrador debe escribir su usuario y PIN.",

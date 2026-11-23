@@ -57,6 +57,8 @@ export interface Payment {
   currency: CurrencyCode;
   /** Amount received in the payment's own currency. */
   amount: Cents;
+  /** Voucher authorization (card) or transfer reference; cash has none. */
+  reference?: string;
 }
 
 export type StockLevel = "ok" | "low" | "out";

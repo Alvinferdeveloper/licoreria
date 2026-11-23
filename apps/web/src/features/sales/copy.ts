@@ -72,6 +72,10 @@ export const invoiceCopy = {
   },
 } as const;
 
+/** Voucher authorization (card) or transfer reference, as printed next to the payment. */
+export const paymentReference = (method: "cash" | "card" | "transfer", reference: string | null | undefined) =>
+  reference && method !== "cash" ? `${method === "card" ? "Aut." : "Ref."} ${reference}` : "";
+
 export const pinCopy = {
   title: "PIN de autorización",
   description: "Con él apruebas en caja descuentos sobre el límite y anulaciones de ventas. Usa de 4 a 6 dígitos que solo tú conozcas.",

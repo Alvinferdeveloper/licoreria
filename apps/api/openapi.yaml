@@ -1604,6 +1604,7 @@ components:
         notes: { type: string }
         summary: { type: object, description: Arqueo por moneda y método, solo en el detalle }
         movements: { type: array, items: { type: object } }
+        nonCash: { type: array, items: { type: object }, description: Pagos con tarjeta y transferencia con su autorización o referencia, solo en el detalle }
     ShiftPage:
       type: object
       properties: { data: { type: array, items: { $ref: '#/components/schemas/Shift' } }, meta: { $ref: '#/components/schemas/PageMeta' } }
