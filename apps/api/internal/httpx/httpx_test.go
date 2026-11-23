@@ -2,8 +2,10 @@ package httpx
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -115,6 +117,22 @@ func TestFailIncludesValidationFields(t *testing.T) {
 	env := decodeEnvelope(t, rec)
 	if rec.Code != http.StatusUnprocessableEntity || len(env.Error.Details.Fields) != 1 || env.Error.Details.Fields[0].Field != "email" {
 		t.Errorf("unexpected validation response %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestClientGoneIsNotAServerError(t *testing.T) {
+	var logs bytes.Buffer
+	h := withMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		Fail(w, r, fmt.Errorf("read products: %w", context.Canceled))
+	}), &logs)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/x", nil).WithContext(ctx))
+
+	if rec.Code != StatusClientClosed || strings.Contains(logs.String(), "ERROR") {
+		t.Errorf("a canceled request must be 499 without an error log, got %d: %s", rec.Code, logs.String())
 	}
 }
 

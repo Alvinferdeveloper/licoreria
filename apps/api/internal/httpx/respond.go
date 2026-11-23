@@ -1,7 +1,9 @@
 package httpx
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5/middleware"
@@ -9,6 +11,9 @@ import (
 	"licoreria/api/internal/apperr"
 	"licoreria/api/internal/platform/logx"
 )
+
+// StatusClientClosed is nginx's 499: the client closed the request before the response.
+const StatusClientClosed = 499
 
 func JSON(w http.ResponseWriter, r *http.Request, status int, body any) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -26,6 +31,11 @@ func NoContent(w http.ResponseWriter) { w.WriteHeader(http.StatusNoContent) }
 // Fail writes the standard error envelope. Server errors are logged with their real cause;
 // the client only gets internal_error and the request id to trace it.
 func Fail(w http.ResponseWriter, r *http.Request, err error) {
+	// The client went away mid-request: nothing failed on our side and nobody reads the reply.
+	if errors.Is(err, context.Canceled) && r.Context().Err() != nil {
+		w.WriteHeader(StatusClientClosed)
+		return
+	}
 	status, body := toBody(err)
 	body.RequestID = middleware.GetReqID(r.Context())
 	if status >= http.StatusInternalServerError {
