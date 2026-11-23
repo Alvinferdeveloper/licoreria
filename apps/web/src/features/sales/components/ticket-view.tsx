@@ -31,7 +31,11 @@ export function TicketView({ id }: { id: string }) {
   useEffect(() => {
     if (!ready || printed.current || !new URLSearchParams(window.location.search).has("print")) return;
     printed.current = true;
-    const timer = setTimeout(() => window.print(), 300);
+    // The logo must be loaded before the print dialog takes its snapshot.
+    const timer = setTimeout(async () => {
+      await Promise.all(Array.from(document.images, (img) => img.decode().catch(() => undefined)));
+      window.print();
+    }, 300);
     return () => clearTimeout(timer);
   }, [ready]);
 
@@ -70,6 +74,10 @@ function Ticket({ sale, store, width }: { sale: Sale; store: StoreSettings; widt
       style={{ width: `${width}mm`, fontSize: small ? "10px" : "11.5px", lineHeight: 1.35 }}
     >
       <header className="text-center">
+        {store.business.logoUrl && (
+          // eslint-disable-next-line @next/next/no-img-element -- remote Supabase URL; thermal printers print it in grayscale
+          <img src={store.business.logoUrl} alt="" className="mx-auto mb-1.5 max-h-14 max-w-[60%] object-contain grayscale" />
+        )}
         <p className="font-sans font-bold" style={{ fontSize: small ? "13px" : "15px" }}>{store.business.name}</p>
         {store.business.taxId && <p>{copy.taxId(store.business.taxId)}</p>}
         {store.business.phone && <p>{store.business.phone}</p>}
