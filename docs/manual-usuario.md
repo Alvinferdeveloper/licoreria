@@ -111,6 +111,7 @@ Una compra recibida se puede anular mientras su stock siga disponible.
 
 **Existencias y kardex (Inventario > Existencias y kardex):**
 
+- **Pronóstico:** con lo vendido en los últimos 28 días (la última semana pesa más), calcula cuántos días le quedan a cada producto y cuánto pedir para cubrir 7, 14 o 30 días más su mínimo. La cantidad se redondea a la presentación más pequeña (por ejemplo, six-packs completos). Cada producto se marca como **Agotado**, **Crítico** (3 días o menos), **Pronto** o **Bajo mínimo**, con un mini gráfico de sus ventas diarias. Los productos se agrupan por el proveedor de su última compra, y **Crear borrador de compra** arma la compra con esas cantidades y el último costo para revisarla antes de recibirla.
 - **Por pedir:** los productos en su punto de reorden, agrupados por proveedor, con un botón para registrar la compra.
 - **Kardex:** cada entrada y salida con su saldo, responsable y origen. No se puede editar: una corrección siempre es un movimiento nuevo.
 - **Registrar ajuste:** un conteo físico o una merma, con motivo obligatorio.

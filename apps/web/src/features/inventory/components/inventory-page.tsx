@@ -11,16 +11,21 @@ import { useSession } from "@/features/auth/session-store";
 import { inventoryCopy as copy } from "../copy";
 import { AdjustmentSheet } from "./adjustment-sheet";
 import { AlertsView } from "./alerts-view";
+import { ForecastView } from "./forecast-view";
 import { MovementsView, type ProductFilter } from "./movements-view";
 
 type View = (typeof copy.views)[number]["value"];
 
 export function InventoryPage() {
   const me = useSession((s) => s.user);
-  const [view, setView] = useState<View>("alerts");
+  const [view, setView] = useState<View>("forecast");
   const [product, setProduct] = useState<ProductFilter | null>(null);
   const [adjusting, setAdjusting] = useState(false);
-  const { notice, success } = useNotice();
+  const { notice, success, failure } = useNotice();
+  const openKardex = (p: ProductFilter) => {
+    setProduct(p);
+    setView("movements");
+  };
 
   return (
     <>
@@ -37,16 +42,12 @@ export function InventoryPage() {
         }
       />
       <div className="space-y-4 px-8 pb-10">
-        <SegmentedControl label={copy.viewLabel} value={view} options={copy.views} onChange={setView} className="w-64" />
+        <SegmentedControl label={copy.viewLabel} value={view} options={copy.views} onChange={setView} className="w-96" />
         <NoticeBanner notice={notice} />
-        {view === "alerts" ? (
-          <AlertsView
-            canBuy={can(me, "purchases:create")}
-            onOpenKardex={(p) => {
-              setProduct(p);
-              setView("movements");
-            }}
-          />
+        {view === "forecast" ? (
+          <ForecastView canBuy={can(me, "purchases:create")} onOpenKardex={openKardex} onFailure={failure} />
+        ) : view === "alerts" ? (
+          <AlertsView canBuy={can(me, "purchases:create")} onOpenKardex={openKardex} />
         ) : (
           <MovementsView product={product} onProduct={setProduct} />
         )}

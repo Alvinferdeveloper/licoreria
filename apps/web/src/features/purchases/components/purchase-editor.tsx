@@ -91,7 +91,8 @@ export function PurchaseEditor({ id }: { id: string | null }) {
   const purchase = useQuery({ queryKey: purchaseKeys.detail(id ?? "new"), queryFn: () => purchasesApi.get(id!), enabled: id !== null });
   const suppliers = useQuery({ queryKey: purchaseKeys.suppliers, queryFn: purchasesApi.suppliers });
 
-  if (id && purchase.isPending) return <p className="px-8 py-10 text-ink-muted">Cargando…</p>;
+  // The supplier <select> is uncontrolled: it must have its options before the saved value lands.
+  if ((id && purchase.isPending) || suppliers.isPending) return <p className="px-8 py-10 text-ink-muted">Cargando…</p>;
   if (id && purchase.isError) {
     return (
       <div className="px-8 py-10">

@@ -613,6 +613,18 @@ paths:
           description: Alertas
           content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/StockAlert' } } } } } }
         default: { $ref: '#/components/responses/Error' }
+  /inventory/forecast:
+    get:
+      tags: [Inventario]
+      summary: Pronóstico de agotamiento y compra sugerida
+      description: 'Permiso: `inventory:view`. Ritmo de venta de los últimos 28 días (la última semana pesa 60 %), días hasta agotarse y cantidad sugerida para cubrir `coverage` días más el mínimo, redondeada a la presentación más pequeña. `lastCost` solo con permiso de ver costos.'
+      parameters:
+        - { name: coverage, in: query, schema: { type: integer, enum: [7, 14, 30], default: 14 } }
+      responses:
+        '200':
+          description: Productos que se agotan antes de la cobertura
+          content: { application/json: { schema: { type: object, additionalProperties: true } } }
+        default: { $ref: '#/components/responses/Error' }
   /inventory/adjustments:
     post:
       tags: [Inventario]

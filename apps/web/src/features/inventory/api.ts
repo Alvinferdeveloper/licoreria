@@ -47,7 +47,26 @@ export const inventoryKeys = {
   all: ["inventory"] as const,
   movements: (f: MovementFilters) => ["inventory", "movements", f] as const,
   alerts: ["inventory", "alerts"] as const,
+  forecast: (coverage: Coverage) => ["inventory", "forecast", coverage] as const,
 };
+
+export type Coverage = "7" | "14" | "30";
+
+export interface ForecastItem {
+  product: { id: string; sku: string; name: string };
+  category: string;
+  stock: number;
+  minStock: number;
+  dailyRate: number;
+  daysLeft: number | null;
+  urgency: "out" | "critical" | "soon" | "min";
+  suggested: number;
+  packSize: number;
+  packName: string;
+  supplier: { id: string; name: string } | null;
+  lastCost?: string | null;
+  history: number[];
+}
 
 export const inventoryApi = {
   movements: (f: MovementFilters) => {
@@ -59,5 +78,6 @@ export const inventoryApi = {
     return api<Page<Movement>>("GET", `/inventory/movements?${params}`);
   },
   alerts: () => api<{ data: StockAlert[] }>("GET", "/inventory/alerts").then((r) => r.data),
+  forecast: (coverage: Coverage) => api<{ data: ForecastItem[]; historyDays: number }>("GET", `/inventory/forecast?coverage=${coverage}`),
   adjust: (input: AdjustmentInput) => api<{ stock: number }>("POST", "/inventory/adjustments", { body: input }),
 };

@@ -22,6 +22,7 @@ func (h *Handler) Routes(r chi.Router) {
 	r.Route("/inventory", func(r chi.Router) {
 		r.With(auth.Require("inventory", "view")).Get("/movements", h.movements)
 		r.With(auth.Require("inventory", "view")).Get("/alerts", h.alerts)
+		r.With(auth.Require("inventory", "view")).Get("/forecast", h.forecast)
 		r.With(auth.Require("inventory", "create")).Post("/adjustments", h.adjust)
 	})
 }
@@ -77,6 +78,23 @@ func (h *Handler) alerts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, r, http.StatusOK, map[string]any{"data": items})
+}
+
+var coverages = map[string]int{"": 14, "7": 7, "14": 14, "30": 30}
+
+func (h *Handler) forecast(w http.ResponseWriter, r *http.Request) {
+	coverage, ok := coverages[r.URL.Query().Get("coverage")]
+	if !ok {
+		httpx.Fail(w, r, apperr.Validation(apperr.FieldError{Field: "coverage", Code: "oneof", Message: "La cobertura debe ser de 7, 14 o 30 días."}))
+		return
+	}
+	p, _ := auth.FromContext(r.Context())
+	items, err := h.svc.Forecast(r.Context(), p, coverage)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	httpx.JSON(w, r, http.StatusOK, map[string]any{"data": items, "coverage": coverage, "historyDays": HistoryDays})
 }
 
 type adjustRequest struct {
