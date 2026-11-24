@@ -1,6 +1,6 @@
 "use client";
 
-import { AddressBook, CashRegister, ChartLine, Database, FileText, ClockCounterClockwise, CurrencyCircleDollar, GearSix, Heartbeat, ListMagnifyingGlass, Package, Receipt, Vault, ShieldCheck, SignOut, Stack, Tag, Truck, UsersThree, Wine, type Icon } from "@phosphor-icons/react";
+import { AddressBook, CashRegister, ChartLine, Database, FileText, ClockCounterClockwise, CurrencyCircleDollar, GearSix, Heartbeat, ListMagnifyingGlass, Package, Receipt, Vault, ShieldCheck, ShieldWarning, SignOut, Stack, Tag, Truck, UsersThree, Wine, type Icon } from "@phosphor-icons/react";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -25,6 +25,7 @@ const NAV: readonly { label: string; items: readonly NavItem[] }[] = [
     items: [
       { href: "/panel", label: "Panel", icon: ChartLine, permission: "dashboard:view" },
       { href: "/reportes", label: "Reportes", icon: FileText, permission: "reports:view" },
+      { href: "/riesgos", label: "Riesgos de caja", icon: ShieldWarning, permission: "audit:view" },
     ],
   },
   {

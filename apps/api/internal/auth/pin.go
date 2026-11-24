@@ -99,8 +99,13 @@ func VerifyPIN(ctx context.Context, db database.DBTX, username, pin, module, act
 		}
 	}
 	if !ok {
-		_ = audit.Record(context.WithoutCancel(ctx), db, audit.Entry{Action: "authorization.failed", Entity: "users", EntityID: &id,
-			After: map[string]string{"permission": Permission(module, action)}})
+		// user_id is who asked (the cashier at the register); entity_id is whose PIN was tried.
+		entry := audit.Entry{Action: "authorization.failed", Entity: "users", EntityID: &id,
+			After: map[string]string{"permission": Permission(module, action)}}
+		if requester, ok := FromContext(ctx); ok {
+			entry.UserID = &requester.UserID
+		}
+		_ = audit.Record(context.WithoutCancel(ctx), db, entry)
 		return uuid.Nil, ErrAuthorizationFailed
 	}
 	return id, nil

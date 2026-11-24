@@ -950,6 +950,18 @@ paths:
             application/vnd.openxmlformats-officedocument.spreadsheetml.sheet: { schema: { type: string, format: binary } }
             application/pdf: { schema: { type: string, format: binary } }
         default: { $ref: '#/components/responses/Error' }
+  /cash-risk:
+    get:
+      tags: [Reportes]
+      summary: Riesgos de caja por cajero
+      description: 'Permiso: `audit:view`. Anulaciones, descuentos cerca o sobre el límite, cierres con faltante, egresos, PIN rechazados y entradas fuera de horario por persona. Cada cajero se compara con las tasas de toda la tienda (`store`) y recibe `flags` y `level` (`high`, `medium`, `low`). `events` lista los últimos 25 hechos a revisar.'
+      parameters:
+        - { name: days, in: query, schema: { type: integer, enum: [7, 30, 90], default: 30 } }
+      responses:
+        '200':
+          description: Reporte
+          content: { application/json: { schema: { type: object, additionalProperties: true } } }
+        default: { $ref: '#/components/responses/Error' }
   /audit-log:
     get:
       tags: [Reportes]

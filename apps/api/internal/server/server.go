@@ -32,6 +32,7 @@ import (
 	"licoreria/api/internal/purchases"
 	"licoreria/api/internal/rates"
 	"licoreria/api/internal/reports"
+	"licoreria/api/internal/risk"
 	"licoreria/api/internal/roles"
 	"licoreria/api/internal/sales"
 	"licoreria/api/internal/settings"
@@ -106,6 +107,7 @@ func NewRouter(deps Deps) http.Handler {
 				dashboard.NewHandler(deps.DB).Routes(protected)
 				backups.NewHandler(deps.Backups).Routes(protected)
 				auditlog.NewHandler(deps.DB).Routes(protected)
+				risk.NewHandler(deps.DB).Routes(protected)
 				monitor.NewHandler(deps.DB, stats, monitor.Options{
 					BackupDir:      deps.Config.Storage.BackupDir,
 					Offsite:        deps.Backups.Offsite(),

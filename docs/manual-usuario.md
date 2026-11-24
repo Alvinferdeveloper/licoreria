@@ -128,6 +128,8 @@ Cuando un producto cruza el mínimo, se envía un correo a quienes compran.
 - **Inventario:** inventario valorizado, productos bajo mínimo, kardex por producto, compras por proveedor.
 - **Control:** bitácora de auditoría.
 
+**Negocio > Riesgos de caja** compara a cada cajero con el resto de la tienda en los últimos 7, 30 o 90 días: anulaciones, descuentos cerca del límite o autorizados con PIN, cierres con faltante, PIN rechazados y entradas fuera de horario. Quien lo hace notablemente más que los demás se marca **Revisar** (una señal) o **Revisar ya** (dos o más). Comparar con la tienda evita castigar a quien simplemente vende más. Debajo están los últimos hechos a revisar, con factura, motivo o caja. Lo ven el administrador y el rol de consulta (permiso de bitácora). Una marca no acusa a nadie: indica qué revisar primero.
+
 ## 9. Clientes y proveedores
 
 En **Personas** se administran clientes y proveedores. Consumidor final es el cliente por defecto y no se puede modificar. Los registros no se borran: se desactivan, para conservar el historial.
