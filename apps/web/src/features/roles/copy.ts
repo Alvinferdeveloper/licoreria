@@ -36,6 +36,7 @@ export const rolesCopy = {
     schedule: "Fuera de horario",
     backups: "Respaldos",
     audit: "Bitácora",
+    system: "Estado del sistema",
   } as Record<string, string>,
   error: "No pudimos cargar los roles.",
 } as const;

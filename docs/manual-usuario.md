@@ -151,11 +151,22 @@ En **Sistema > Configuración** se definen:
 
 La numeración se lleva por caja. Cada una tiene su serie, que se administra en **Turnos de caja** y se bloquea tras la primera factura.
 
-## 12. Bitácora y respaldos (Administrador)
+## 12. Bitácora, respaldos y estado del sistema (Administrador)
 
 **Sistema > Bitácora** registra quién hizo qué, cuándo y desde dónde. Nadie puede modificarla.
 
 **Sistema > Respaldos** crea, descarga, verifica y restaura copias de la base de datos. La guía completa está en [respaldos.md](respaldos.md).
+
+**Sistema > Estado del sistema** revisa en vivo, cada 15 segundos, lo que el negocio necesita para vender y no perder datos. Cada tarjeta dice **Bien**, **Revisar** o **Falla**:
+
+- **Base de datos:** si responde y en cuánto tiempo, su tamaño y las conexiones en uso.
+- **Respaldos:** cuándo fue el último, a qué hora corre el automático y si hay copia externa. Avisa si pasó más de un día sin respaldo o si el último intento falló.
+- **Tasa del día:** si falta, el punto de venta no puede cobrar; la tarjeta trae el enlace para registrarla.
+- **Correo:** enviados, en cola y fallidos en las últimas 24 horas.
+- **Disco del servidor:** espacio libre; avisa por debajo del 15 % porque los respaldos podrían fallar.
+- **Imágenes y logo:** si la conexión con Supabase Storage está configurada.
+- **Servidor y actividad:** tiempo encendido, memoria, sesiones abiertas, cajas abiertas y ventas sin conexión sincronizadas.
+- **Tráfico de la API:** peticiones por hora de las últimas 24 horas y los últimos errores del servidor con su código de solicitud, que sirve para encontrar el detalle en los registros.
 
 ## Mensajes frecuentes
 

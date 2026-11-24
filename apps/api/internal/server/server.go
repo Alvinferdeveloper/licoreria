@@ -24,6 +24,7 @@ import (
 	"licoreria/api/internal/health"
 	"licoreria/api/internal/httpx"
 	"licoreria/api/internal/inventory"
+	"licoreria/api/internal/monitor"
 	"licoreria/api/internal/parties"
 	"licoreria/api/internal/platform/config"
 	"licoreria/api/internal/platform/storage"
@@ -46,9 +47,11 @@ type Deps struct {
 
 func NewRouter(deps Deps) http.Handler {
 	r := chi.NewRouter()
+	stats := httpx.NewStats(time.Now)
 	r.Use(
 		middleware.RealIP,
 		httpx.RequestID(deps.Logger),
+		stats.Middleware,
 		httpx.AccessLog,
 		httpx.Recoverer,
 		httpx.SecurityHeaders,
@@ -103,10 +106,23 @@ func NewRouter(deps Deps) http.Handler {
 				dashboard.NewHandler(deps.DB).Routes(protected)
 				backups.NewHandler(deps.Backups).Routes(protected)
 				auditlog.NewHandler(deps.DB).Routes(protected)
+				monitor.NewHandler(deps.DB, stats, monitor.Options{
+					BackupDir:      deps.Config.Storage.BackupDir,
+					Offsite:        deps.Backups.Offsite(),
+					StorageEnabled: store.Enabled(),
+					MailSender:     mailSender(deps.Config),
+				}).Routes(protected)
 			})
 		})
 	})
 	return r
+}
+
+func mailSender(cfg config.Config) string {
+	if cfg.Mail.ResendAPIKey != "" {
+		return "resend"
+	}
+	return "smtp"
 }
 
 // NewBackups builds the backup service, with its private bucket when one is configured.

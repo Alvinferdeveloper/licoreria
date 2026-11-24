@@ -1071,6 +1071,16 @@ paths:
           description: Estado
           content: { application/json: { schema: { $ref: '#/components/schemas/BackupStatus' } } }
         default: { $ref: '#/components/responses/Error' }
+  /system/status:
+    get:
+      tags: [Sistema]
+      summary: Estado del sistema
+      description: 'Permiso: `system:view`. Base de datos, respaldos, disco, correo, almacenamiento, tasa del día, actividad y tráfico de las últimas 24 horas (en memoria, se reinicia con la API). Cada sección trae `status`: `ok`, `warn`, `fail` o `unknown`.'
+      responses:
+        '200':
+          description: Reporte
+          content: { application/json: { schema: { type: object, additionalProperties: true } } }
+        default: { $ref: '#/components/responses/Error' }
   /backups/policy:
     put:
       tags: [Respaldos]
