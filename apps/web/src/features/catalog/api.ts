@@ -124,6 +124,11 @@ export const catalogApi = {
   lookup: (code: string) =>
     api<{ product: Product; presentationId: string | null }>("GET", `/products/lookup?code=${encodeURIComponent(code)}`, { timeoutMs: 8_000 }),
   createProduct: (input: ProductInput) => api<Product>("POST", "/products", { body: input }),
+  suggestSku: (name: string, brandId: string) => {
+    const params = new URLSearchParams({ name });
+    if (brandId) params.set("brandId", brandId);
+    return api<{ sku: string }>("GET", `/products/sku-suggestion?${params}`).then((r) => r.sku);
+  },
   updateProduct: (id: string, input: ProductInput) => api<Product>("PUT", `/products/${id}`, { body: input }),
   setProductActive: (id: string, active: boolean) => api<Product>("PATCH", `/products/${id}/status`, { body: { active } }),
   uploadImage: (id: string, file: File) => {

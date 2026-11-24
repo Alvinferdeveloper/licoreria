@@ -396,6 +396,19 @@ paths:
       responses:
         '201': { $ref: '#/components/responses/Product' }
         default: { $ref: '#/components/responses/Error' }
+  /products/sku-suggestion:
+    get:
+      tags: [Catálogo]
+      summary: Sugerir un SKU libre
+      description: 'Permiso: `products:create`. MARCA-NOMBRE-VOLUMEN (por ejemplo `FDC-7AN-750`); si ya existe agrega `-2`, `-3`…'
+      parameters:
+        - { name: name, in: query, schema: { type: string } }
+        - { name: brandId, in: query, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: SKU sugerido
+          content: { application/json: { schema: { type: object, properties: { sku: { type: string } } } } }
+        default: { $ref: '#/components/responses/Error' }
   /products/lookup:
     get:
       tags: [Catálogo]
@@ -623,6 +636,18 @@ paths:
       responses:
         '200':
           description: Productos que se agotan antes de la cobertura
+          content: { application/json: { schema: { type: object, additionalProperties: true } } }
+        default: { $ref: '#/components/responses/Error' }
+  /inventory/expiring:
+    get:
+      tags: [Inventario]
+      summary: Lotes vencidos o por vencer
+      description: 'Permiso: `inventory:view`. Lo que queda de cada línea de compra recibida con fecha de vencimiento, asumiendo que se vende primero lo más antiguo (el stock actual pertenece a las compras más recientes). Incluye lo ya vencido y lo que vence dentro de `days`. `unitCost` solo con permiso de ver costos. Los administradores reciben un correo una vez por lote al entrar en la ventana de 30 días.'
+      parameters:
+        - { name: days, in: query, schema: { type: integer, enum: [30, 60, 90], default: 30 } }
+      responses:
+        '200':
+          description: Lotes
           content: { application/json: { schema: { type: object, additionalProperties: true } } }
         default: { $ref: '#/components/responses/Error' }
   /inventory/adjustments:
@@ -1554,6 +1579,7 @@ components:
               productId: { type: string, format: uuid }
               quantity: { type: integer, minimum: 1, maximum: 100000 }
               unitCost: { $ref: '#/components/schemas/Money' }
+              expiresOn: { type: [string, 'null'], format: date, description: 'Fecha de vencimiento opcional de lo recibido en esta línea.' }
     Purchase:
       type: object
       properties:
@@ -1585,6 +1611,7 @@ components:
               subtotal: { $ref: '#/components/schemas/Money' }
               taxPercent: { type: string }
               previousCost: { type: [string, 'null'] }
+              expiresOn: { type: [string, 'null'], format: date }
     PurchasePage:
       type: object
       properties: { data: { type: array, items: { $ref: '#/components/schemas/Purchase' } }, meta: { $ref: '#/components/schemas/PageMeta' } }

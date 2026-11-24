@@ -32,6 +32,7 @@ type itemRequest struct {
 	ProductID uuid.UUID `json:"productId" validate:"required"`
 	Quantity  int       `json:"quantity" validate:"gt=0,lte=100000"`
 	UnitCost  string    `json:"unitCost" validate:"required,money"`
+	ExpiresOn *string   `json:"expiresOn" validate:"omitempty,datetime=2006-01-02"`
 }
 
 type purchaseRequest struct {
@@ -45,7 +46,7 @@ type purchaseRequest struct {
 func (req purchaseRequest) input() Input {
 	in := Input{SupplierID: req.SupplierID, SupplierInvoiceNumber: req.SupplierInvoiceNumber, PurchaseDate: req.PurchaseDate, Notes: req.Notes}
 	for _, item := range req.Items {
-		in.Items = append(in.Items, ItemInput{ProductID: item.ProductID, Quantity: item.Quantity, UnitCost: item.UnitCost})
+		in.Items = append(in.Items, ItemInput{ProductID: item.ProductID, Quantity: item.Quantity, UnitCost: item.UnitCost, ExpiresOn: item.ExpiresOn})
 	}
 	return in
 }

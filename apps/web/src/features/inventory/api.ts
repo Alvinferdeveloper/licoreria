@@ -48,9 +48,24 @@ export const inventoryKeys = {
   movements: (f: MovementFilters) => ["inventory", "movements", f] as const,
   alerts: ["inventory", "alerts"] as const,
   forecast: (coverage: Coverage) => ["inventory", "forecast", coverage] as const,
+  expiring: (days: ExpiryWindow) => ["inventory", "expiring", days] as const,
 };
 
 export type Coverage = "7" | "14" | "30";
+export type ExpiryWindow = "30" | "60" | "90";
+
+export interface ExpiringLot {
+  lineId: string;
+  product: { id: string; sku: string; name: string };
+  category: string;
+  supplier: { id: string; name: string };
+  purchaseId: string;
+  receivedAt: string;
+  expiresOn: string;
+  daysLeft: number;
+  remaining: number;
+  unitCost?: string | null;
+}
 
 export interface ForecastItem {
   product: { id: string; sku: string; name: string };
@@ -78,6 +93,7 @@ export const inventoryApi = {
     return api<Page<Movement>>("GET", `/inventory/movements?${params}`);
   },
   alerts: () => api<{ data: StockAlert[] }>("GET", "/inventory/alerts").then((r) => r.data),
+  expiring: (days: ExpiryWindow) => api<{ data: ExpiringLot[] }>("GET", `/inventory/expiring?days=${days}`).then((r) => r.data),
   forecast: (coverage: Coverage) => api<{ data: ForecastItem[]; historyDays: number }>("GET", `/inventory/forecast?coverage=${coverage}`),
   adjust: (input: AdjustmentInput) => api<{ stock: number }>("POST", "/inventory/adjustments", { body: input }),
 };

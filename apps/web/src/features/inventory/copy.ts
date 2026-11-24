@@ -7,8 +7,27 @@ export const inventoryCopy = {
   views: [
     { value: "forecast", label: "Pronóstico" },
     { value: "alerts", label: "Por pedir" },
+    { value: "expiry", label: "Vencimientos" },
     { value: "movements", label: "Kardex" },
   ] as const,
+  expiry: {
+    intro: "Lo que queda en el estante de cada compra con fecha de vencimiento. Se asume que primero sale lo más antiguo, como en el mostrador.",
+    window: "Mostrar",
+    windows: [
+      { value: "30", label: "30 días" },
+      { value: "60", label: "60 días" },
+      { value: "90", label: "90 días" },
+    ] as const,
+    columns: { product: "Producto", lot: "Compra", expires: "Vence", remaining: "Quedan", value: "Valor", action: "" },
+    lot: (supplier: string, date: string) => `${supplier} · ${date}`,
+    status: (days: number) => (days < 0 ? "Vencido" : days === 0 ? "Vence hoy" : days === 1 ? "Mañana" : `En ${days} días`),
+    summary: { expired: "Vencidos", soon: "Por vencer", units: "Unidades en riesgo", value: "Valor en riesgo" },
+    writeOff: "Dar de baja",
+    confirm: "Confirmar baja",
+    reason: (date: string) => `Producto vencido el ${date}`,
+    done: (name: string, units: number) => `Se dieron de baja ${units} u de ${name} como merma.`,
+    empty: { title: "Nada por vencer", body: "Ningún lote con fecha de vencimiento vence en este periodo. La fecha se anota al registrar la compra." },
+  },
   forecast: {
     intro: (days: number) => `Según lo vendido en los últimos ${days} días (la última semana pesa más), estos productos se agotan antes de lo que quieres cubrir.`,
     coverage: "Cubrir",

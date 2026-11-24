@@ -335,8 +335,9 @@ func (h *history) restock(ctx context.Context, day time.Time, leaveGaps bool) er
 		for _, it := range items {
 			quantity := it.target - it.stock
 			if _, err := h.tx.Exec(ctx, `
-				INSERT INTO purchase_items (purchase_id, product_id, quantity, unit_cost, subtotal)
-				VALUES ($1, $2, $3, $4::numeric, $5::numeric)`, id, it.id, quantity, cents(it.costCents), cents(it.costCents*int64(quantity))); err != nil {
+				INSERT INTO purchase_items (purchase_id, product_id, quantity, unit_cost, subtotal, expires_on)
+				VALUES ($1, $2, $3, $4::numeric, $5::numeric, $6::date)`, id, it.id, quantity, cents(it.costCents), cents(it.costCents*int64(quantity)),
+				expiresOn(it, day)); err != nil {
 				return err
 			}
 			if err := h.move(ctx, it, "purchase", quantity, reason, "purchase", id, at); err != nil {
@@ -345,6 +346,24 @@ func (h *history) restock(ctx context.Context, day time.Time, leaveGaps bool) er
 		}
 	}
 	return nil
+}
+
+// expiresOn gives perishable categories a best-before date; spirits keep none. The spread makes
+// some recent lots fall inside the 30–90 day expiry window of the demo.
+func expiresOn(it *stockItem, day time.Time) *string {
+	var minDays, spread int
+	switch it.category {
+	case "Cerveza":
+		minDays, spread = 50, 110
+	case "Mezcladores":
+		minDays, spread = 80, 160
+	case "Vino":
+		minDays, spread = 240, 480
+	default:
+		return nil
+	}
+	date := day.AddDate(0, 0, minDays+stableHash(it.brand+day.Format(time.DateOnly))%spread).Format(time.DateOnly)
+	return &date
 }
 
 func (h *history) move(ctx context.Context, it *stockItem, kind string, quantity int, reason, source string, sourceID uuid.UUID, at time.Time) error {

@@ -27,6 +27,7 @@ export const productsCopy = {
     name: "Nombre",
     sku: "SKU",
     skuHint: "Código interno único. Se guarda en mayúsculas.",
+    skuAutoHint: "Se sugiere solo con la marca, el nombre y el volumen. Puedes escribir el tuyo.",
     barcode: "Código de barras",
     barcodeHint: "Escanéalo o escríbelo. Opcional.",
     category: "Categoría",
@@ -55,7 +56,7 @@ export const productsCopy = {
     remove: "Quitar",
     placeholders: {
       name: "Ej. Flor de Caña 7 años 750 ml",
-      sku: "FDC-7-750",
+      sku: "FDC-7AN-750",
       barcode: "7430011001080",
       money: "0.00",
       tax: "15",

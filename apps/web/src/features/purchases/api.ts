@@ -16,6 +16,7 @@ export interface PurchaseItem {
   taxPercent: string;
   /** Unit cost of the product's previous received purchase, to compare prices. */
   previousCost: string | null;
+  expiresOn: string | null;
 }
 
 export interface Purchase {
@@ -43,7 +44,7 @@ export interface PurchaseInput {
   supplierInvoiceNumber: string;
   purchaseDate: string;
   notes: string;
-  items: { productId: string; quantity: number; unitCost: string }[];
+  items: { productId: string; quantity: number; unitCost: string; expiresOn?: string | null }[];
 }
 
 export interface PurchaseFilters {

@@ -2,8 +2,8 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ImageSquare, Plus, Trash } from "@phosphor-icons/react";
-import { useRef, useState, type ComponentProps, type ReactNode } from "react";
-import { useFieldArray, useForm } from "react-hook-form";
+import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
+import { useFieldArray, useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Field, Input, inputClassName } from "@/components/ui/field";
 import { applyApiError } from "@/lib/api/form-errors";
 import { ApiError } from "@/lib/api/client";
-import type { Master, Product, ProductInput } from "../api";
+import { catalogApi, type Master, type Product, type ProductInput } from "../api";
 import { productsCopy } from "../copy";
 
 const { form: copy, validation: v } = productsCopy;
@@ -116,6 +116,21 @@ export function ProductForm({ product, categories, brands, units, canEditPrices,
   const presentations = useFieldArray({ control: form.control, name: "presentations" });
   const { errors, isSubmitting } = form.formState;
   const priceLocked = !canEditPrices;
+  const skuTyped = useRef(false);
+  const skuField = form.register("sku");
+  const [name, brandId] = useWatch({ control: form.control, name: ["name", "brandId"] });
+
+  // New products get a SKU from brand + name + volume until the user types their own.
+  useEffect(() => {
+    if (product || skuTyped.current || name.trim().length < 3) return;
+    const timer = setTimeout(() => {
+      catalogApi.suggestSku(name.trim(), brandId).then(
+        (sku) => !skuTyped.current && form.setValue("sku", sku, { shouldValidate: form.formState.isSubmitted }),
+        () => undefined,
+      );
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [product, name, brandId, form]);
 
   const submit = form.handleSubmit(async (values) => {
     setFormError(null);
@@ -136,8 +151,18 @@ export function ProductForm({ product, categories, brands, units, canEditPrices,
         <Field label={copy.name} error={errors.name?.message} className="sm:col-span-2">
           <Input autoFocus placeholder={ph.name} {...form.register("name")} />
         </Field>
-        <Field label={copy.sku} hint={copy.skuHint} error={errors.sku?.message}>
-          <Input className="font-mono uppercase" autoCapitalize="characters" spellCheck={false} placeholder={ph.sku} {...form.register("sku")} />
+        <Field label={copy.sku} hint={product ? copy.skuHint : copy.skuAutoHint} error={errors.sku?.message}>
+          <Input
+            className="font-mono uppercase"
+            autoCapitalize="characters"
+            spellCheck={false}
+            placeholder={ph.sku}
+            {...skuField}
+            onChange={(event) => {
+              skuTyped.current = event.target.value.trim() !== "";
+              return skuField.onChange(event);
+            }}
+          />
         </Field>
         <Field label={copy.barcode} hint={copy.barcodeHint} error={errors.barcode?.message}>
           <Input className="font-mono" inputMode="numeric" spellCheck={false} placeholder={ph.barcode} {...form.register("barcode")} />

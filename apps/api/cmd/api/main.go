@@ -13,6 +13,7 @@ import (
 	"syscall"
 	"time"
 
+	"licoreria/api/internal/inventory"
 	"licoreria/api/internal/mail"
 	"licoreria/api/internal/platform/config"
 	"licoreria/api/internal/platform/database"
@@ -87,6 +88,7 @@ func serve(cfg config.Config, logger *slog.Logger) error {
 
 	backupSvc := server.NewBackups(cfg, logger, pool)
 	go backupSvc.RunScheduler(ctx)
+	go inventory.RunExpiryAlerts(ctx, pool, cfg.AppBaseURL, logger)
 
 	router := server.NewRouter(server.Deps{Config: cfg, Logger: logger, DB: pool, Backups: backupSvc})
 	return server.Run(ctx, cfg, logger, router)

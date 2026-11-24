@@ -22,7 +22,7 @@ import { ProductPicker } from "@/features/catalog/components/product-picker";
 import { ApiError } from "@/lib/api/client";
 import { applyApiError } from "@/lib/api/form-errors";
 import { cn } from "@/lib/cn";
-import { formatDateTime, todayISO } from "@/lib/format/date";
+import { formatDate, formatDateTime, todayISO } from "@/lib/format/date";
 import { formatAmount, parseAmount } from "@/lib/money";
 import { purchaseKeys, purchasesApi, type Purchase, type PurchaseInput } from "../api";
 import { purchasesCopy } from "../copy";
@@ -47,6 +47,7 @@ const schema = z.object({
         reference: z.string().nullable(),
         quantity: z.string().trim().regex(/^\d{1,6}$/, v.quantity).refine((s) => Number(s) > 0, v.quantity),
         unitCost: z.string().trim().regex(moneyPattern, v.cost),
+        expiresOn: z.string(),
       }),
     )
     .min(1, v.lines),
@@ -72,6 +73,7 @@ function toValues(p: Purchase | undefined): Values {
       reference: i.previousCost,
       quantity: String(i.quantity),
       unitCost: costText(i.unitCost),
+      expiresOn: i.expiresOn ?? "",
     })),
   };
 }
@@ -82,7 +84,7 @@ function toInput(values: Values): PurchaseInput {
     supplierInvoiceNumber: values.supplierInvoiceNumber.trim(),
     purchaseDate: values.purchaseDate,
     notes: values.notes.trim(),
-    items: values.items.map((i) => ({ productId: i.productId, quantity: Number(i.quantity), unitCost: i.unitCost.trim() })),
+    items: values.items.map((i) => ({ productId: i.productId, quantity: Number(i.quantity), unitCost: i.unitCost.trim(), expiresOn: i.expiresOn || null })),
   };
 }
 
@@ -158,7 +160,7 @@ function EditorForm({ purchase, suppliers }: { purchase: Purchase | undefined; s
 
   const addProduct = (product: Product) => {
     const cost = product.averageCost && Number(product.averageCost) > 0 ? costText(product.averageCost) : "";
-    lines.append({ productId: product.id, name: product.name, sku: product.sku, taxPercent: product.taxPercent, reference: null, quantity: "1", unitCost: cost });
+    lines.append({ productId: product.id, name: product.name, sku: product.sku, taxPercent: product.taxPercent, reference: null, quantity: "1", unitCost: cost, expiresOn: "" });
   };
 
   const title = purchase ? copy.title(purchase.supplier.name) : copy.newTitle;
@@ -225,6 +227,7 @@ function EditorForm({ purchase, suppliers }: { purchase: Purchase | undefined; s
                     <th className="px-4 py-2.5 font-medium">{copy.columns.product}</th>
                     <th className="w-28 px-4 py-2.5 text-right font-medium">{copy.columns.quantity}</th>
                     <th className="w-40 px-4 py-2.5 text-right font-medium">{copy.columns.cost}</th>
+                    <th className="w-44 px-4 py-2.5 font-medium" title={copy.expiresHint}>{copy.columns.expires}</th>
                     <th className="w-36 px-4 py-2.5 text-right font-medium">{copy.columns.subtotal}</th>
                     {editable && <th className="w-12" aria-label={copy.remove} />}
                   </tr>
@@ -332,6 +335,13 @@ function LineRow({ index, control, editable, register, errors, onRemove }: LineR
               </span>
             )}
           </p>
+        )}
+      </td>
+      <td className={cell}>
+        {editable ? (
+          <Input {...register(`items.${index}.expiresOn`)} type="date" aria-label={`${copy.columns.expires} ${line.name}`} className="h-9 font-mono tabular" />
+        ) : (
+          <span className="font-mono tabular text-label">{line.expiresOn ? formatDate(line.expiresOn) : <span className="text-ink-subtle">—</span>}</span>
         )}
       </td>
       <td className={cn(cell, "pt-4 text-right")}>{cost !== null && qty > 0 ? <Money cents={cost * qty} className="font-mono" /> : <span className="text-ink-subtle">—</span>}</td>

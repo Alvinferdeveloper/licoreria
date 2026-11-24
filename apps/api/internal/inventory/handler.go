@@ -23,6 +23,7 @@ func (h *Handler) Routes(r chi.Router) {
 		r.With(auth.Require("inventory", "view")).Get("/movements", h.movements)
 		r.With(auth.Require("inventory", "view")).Get("/alerts", h.alerts)
 		r.With(auth.Require("inventory", "view")).Get("/forecast", h.forecast)
+		r.With(auth.Require("inventory", "view")).Get("/expiring", h.expiring)
 		r.With(auth.Require("inventory", "create")).Post("/adjustments", h.adjust)
 	})
 }
@@ -95,6 +96,23 @@ func (h *Handler) forecast(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, r, http.StatusOK, map[string]any{"data": items, "coverage": coverage, "historyDays": HistoryDays})
+}
+
+var expiryWindows = map[string]int{"": 30, "30": 30, "60": 60, "90": 90}
+
+func (h *Handler) expiring(w http.ResponseWriter, r *http.Request) {
+	days, ok := expiryWindows[r.URL.Query().Get("days")]
+	if !ok {
+		httpx.Fail(w, r, apperr.Validation(apperr.FieldError{Field: "days", Code: "oneof", Message: "La ventana debe ser de 30, 60 o 90 días."}))
+		return
+	}
+	p, _ := auth.FromContext(r.Context())
+	lots, err := h.svc.Expiring(r.Context(), p, days)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	httpx.JSON(w, r, http.StatusOK, map[string]any{"data": lots, "days": days})
 }
 
 type adjustRequest struct {

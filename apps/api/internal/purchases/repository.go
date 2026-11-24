@@ -44,6 +44,7 @@ type Item struct {
 	Subtotal     string     `json:"subtotal"`
 	TaxPercent   string     `json:"taxPercent"`
 	PreviousCost *string    `json:"previousCost"`
+	ExpiresOn    *string    `json:"expiresOn"`
 }
 
 type Purchase struct {
@@ -153,7 +154,7 @@ func (repository) get(ctx context.Context, db database.DBTX, id uuid.UUID, lock 
 		SELECT COALESCE(json_agg(json_build_object(
 			'id', pi.id, 'product', json_build_object('id', p.id, 'sku', p.sku, 'name', p.name),
 			'quantity', pi.quantity, 'unitCost', pi.unit_cost::text, 'subtotal', pi.subtotal::text,
-			'taxPercent', p.tax_percent::text,
+			'taxPercent', p.tax_percent::text, 'expiresOn', pi.expires_on,
 			'previousCost', (SELECT prev.unit_cost::text FROM purchase_items prev
 			                 JOIN purchases pp ON pp.id = prev.purchase_id AND pp.status = 'received'
 			                 WHERE prev.product_id = pi.product_id AND pp.id <> pi.purchase_id
@@ -193,8 +194,8 @@ func (repository) replaceItems(ctx context.Context, db database.DBTX, id uuid.UU
 	}
 	for _, item := range items {
 		_, err := db.Exec(ctx, `
-			INSERT INTO purchase_items (purchase_id, product_id, quantity, unit_cost, subtotal)
-			VALUES ($1, $2, $3::int, $4::numeric, round($3::int * $4::numeric, 2))`, id, item.ProductID, item.Quantity, item.UnitCost)
+			INSERT INTO purchase_items (purchase_id, product_id, quantity, unit_cost, subtotal, expires_on)
+			VALUES ($1, $2, $3::int, $4::numeric, round($3::int * $4::numeric, 2), $5::date)`, id, item.ProductID, item.Quantity, item.UnitCost, item.ExpiresOn)
 		if err != nil {
 			return database.MapError(err, constraintFields)
 		}

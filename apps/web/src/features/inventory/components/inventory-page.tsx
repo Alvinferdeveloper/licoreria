@@ -11,6 +11,7 @@ import { useSession } from "@/features/auth/session-store";
 import { inventoryCopy as copy } from "../copy";
 import { AdjustmentSheet } from "./adjustment-sheet";
 import { AlertsView } from "./alerts-view";
+import { ExpiryView } from "./expiry-view";
 import { ForecastView } from "./forecast-view";
 import { MovementsView, type ProductFilter } from "./movements-view";
 
@@ -18,7 +19,10 @@ type View = (typeof copy.views)[number]["value"];
 
 export function InventoryPage() {
   const me = useSession((s) => s.user);
-  const [view, setView] = useState<View>("forecast");
+  // The expiry email links to ?vista=vencimientos.
+  const [view, setView] = useState<View>(() =>
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("vista") === "vencimientos" ? "expiry" : "forecast",
+  );
   const [product, setProduct] = useState<ProductFilter | null>(null);
   const [adjusting, setAdjusting] = useState(false);
   const { notice, success, failure } = useNotice();
@@ -42,10 +46,12 @@ export function InventoryPage() {
         }
       />
       <div className="space-y-4 px-8 pb-10">
-        <SegmentedControl label={copy.viewLabel} value={view} options={copy.views} onChange={setView} className="w-96" />
+        <SegmentedControl label={copy.viewLabel} value={view} options={copy.views} onChange={setView} className="w-[32rem] max-w-full" />
         <NoticeBanner notice={notice} />
         {view === "forecast" ? (
           <ForecastView canBuy={can(me, "purchases:create")} onOpenKardex={openKardex} onFailure={failure} />
+        ) : view === "expiry" ? (
+          <ExpiryView canAdjust={can(me, "inventory:create")} onOpenKardex={openKardex} onDone={success} onFailure={failure} />
         ) : view === "alerts" ? (
           <AlertsView canBuy={can(me, "purchases:create")} onOpenKardex={openKardex} />
         ) : (

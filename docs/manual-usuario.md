@@ -95,6 +95,7 @@ El historial de todas las cajas está en **Vender > Turnos de caja**.
 ## 6. Productos y catálogo
 
 - **Inventario > Productos:** crear, editar, buscar y desactivar productos. Un producto puede tener presentaciones, como six-pack o caja, con su propio código y precio.
+- **SKU automático:** al crear un producto, el SKU se sugiere solo con las siglas de la marca, el inicio del nombre y el volumen ("Flor de Caña 7 años 750 ml" → `FDC-7AN-750`). Si ya existe, se le agrega `-2`, `-3`… Puedes escribir el tuyo.
 - **Importar:** carga masiva desde Excel o CSV. Descarga la plantilla, revisa la vista previa de errores y confirma. Solo entran las filas válidas.
 - **Categorías y marcas:** los datos maestros, incluidas las unidades de medida.
 
@@ -104,7 +105,7 @@ Solo el Administrador ve los costos y cambia precios.
 
 **Registrar una compra (Inventario > Compras):**
 
-1. Crea la compra con proveedor, fecha, número de factura y productos. Queda en borrador.
+1. Crea la compra con proveedor, fecha, número de factura y productos. Queda en borrador. Para cerveza, vino y mezcladores anota la fecha de vencimiento de cada producto (columna **Vence**, opcional).
 2. Al llegar la mercadería, pulsa **Recibir**. El stock sube y se actualiza el costo promedio.
 
 Una compra recibida se puede anular mientras su stock siga disponible.
@@ -113,6 +114,7 @@ Una compra recibida se puede anular mientras su stock siga disponible.
 
 - **Pronóstico:** con lo vendido en los últimos 28 días (la última semana pesa más), calcula cuántos días le quedan a cada producto y cuánto pedir para cubrir 7, 14 o 30 días más su mínimo. La cantidad se redondea a la presentación más pequeña (por ejemplo, six-packs completos). Cada producto se marca como **Agotado**, **Crítico** (3 días o menos), **Pronto** o **Bajo mínimo**, con un mini gráfico de sus ventas diarias. Los productos se agrupan por el proveedor de su última compra, y **Crear borrador de compra** arma la compra con esas cantidades y el último costo para revisarla antes de recibirla.
 - **Por pedir:** los productos en su punto de reorden, agrupados por proveedor, con un botón para registrar la compra.
+- **Vencimientos:** lo vencido y lo que vence en 30, 60 o 90 días, con cuántas unidades quedan de cada compra y su valor. Se asume que primero sale lo más antiguo, así que el stock actual pertenece a las compras más recientes. Lo vencido se da de baja como merma con **Dar de baja** (dos clics para confirmar). Los administradores reciben un correo una sola vez por cada lote que entra en los últimos 30 días antes de vencer.
 - **Kardex:** cada entrada y salida con su saldo, responsable y origen. No se puede editar: una corrección siempre es un movimiento nuevo.
 - **Registrar ajuste:** un conteo físico o una merma, con motivo obligatorio.
 

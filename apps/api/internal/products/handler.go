@@ -25,6 +25,7 @@ func (h *Handler) Routes(r chi.Router) {
 		r.With(auth.Require("products", "view")).Get("/", h.list)
 		r.With(auth.Require("products", "view")).Get("/lookup", h.lookup)
 		r.With(auth.Require("products", "create")).Post("/", h.create)
+		r.With(auth.Require("products", "create")).Get("/sku-suggestion", h.suggestSKU)
 		r.With(auth.Require("products", "create")).Get("/import/template", h.importTemplate)
 		r.With(auth.Require("products", "create")).Post("/import", h.importFile)
 		r.With(auth.Require("products", "view")).Get("/{id}", h.get)
@@ -119,6 +120,25 @@ func parseFilter(r *http.Request) (Filter, error) {
 		f.Active = &active
 	}
 	return f, nil
+}
+
+func (h *Handler) suggestSKU(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	var brandID *uuid.UUID
+	if raw := q.Get("brandId"); raw != "" {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			httpx.Fail(w, r, apperr.Validation(apperr.FieldError{Field: "brandId", Code: "uuid", Message: "El identificador no es válido."}))
+			return
+		}
+		brandID = &id
+	}
+	sku, err := h.svc.SuggestSKU(r.Context(), brandID, q.Get("name"))
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	httpx.JSON(w, r, http.StatusOK, map[string]string{"sku": sku})
 }
 
 func (h *Handler) lookup(w http.ResponseWriter, r *http.Request) {

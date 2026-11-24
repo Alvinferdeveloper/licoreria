@@ -35,6 +35,8 @@ type ItemInput struct {
 	ProductID uuid.UUID
 	Quantity  int
 	UnitCost  string
+	// ExpiresOn is the optional best-before date (YYYY-MM-DD) of this line.
+	ExpiresOn *string
 }
 
 type Service struct {
