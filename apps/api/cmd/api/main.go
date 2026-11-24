@@ -51,7 +51,7 @@ func run(args []string) error {
 	case "create-admin":
 		return createAdmin(cfg, args[1:])
 	case "seed-demo":
-		return seedDemo(cfg)
+		return seedDemo(cfg, os.Args[2:])
 	case "verify-backup":
 		return verifyBackup(cfg, logger)
 	default:
@@ -118,7 +118,13 @@ func verifyBackup(cfg config.Config, logger *slog.Logger) error {
 }
 
 // seedDemo loads the demo catalog, customers, suppliers and sales history once.
-func seedDemo(cfg config.Config) error {
+// seedDemo loads the demo once; with -reset it first erases the catalog, sales and audit log.
+func seedDemo(cfg config.Config, args []string) error {
+	flags := flag.NewFlagSet("seed-demo", flag.ContinueOnError)
+	reset := flags.Bool("reset", false, "erase catalog, operations and audit log before loading")
+	if err := flags.Parse(args); err != nil {
+		return err
+	}
 	ctx := context.Background()
 	if err := database.MigrateUp(cfg.DatabaseURL); err != nil {
 		return err
@@ -128,6 +134,13 @@ func seedDemo(cfg config.Config) error {
 		return err
 	}
 	defer pool.Close()
+
+	if *reset {
+		if err := seed.Reset(ctx, pool); err != nil {
+			return err
+		}
+		fmt.Println("Datos anteriores borrados (se conservan usuarios, roles, cajas, configuración y respaldos).")
+	}
 
 	result, err := seed.Demo(ctx, pool)
 	if err != nil {

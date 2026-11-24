@@ -89,6 +89,23 @@ func Demo(ctx context.Context, pool *pgxpool.Pool) (Result, error) {
 	return result, err
 }
 
+// Reset removes the catalog, every operation and the audit log so the demo can be loaded again.
+// Users, roles, registers, settings and backups stay.
+func Reset(ctx context.Context, pool *pgxpool.Pool) error {
+	return database.WithTx(ctx, pool, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `
+			TRUNCATE inventory_movements, purchases, returns, sales, cash_shifts, exchange_rates,
+			         products, categories, brands, suppliers, audit_log, email_queue CASCADE`); err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `DELETE FROM customers WHERE NOT is_walk_in`); err != nil {
+			return err
+		}
+		_, err := tx.Exec(ctx, `UPDATE registers SET next_invoice_number = 1`)
+		return err
+	})
+}
+
 type seeder struct {
 	tx         pgx.Tx
 	admin      uuid.UUID

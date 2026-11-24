@@ -7,23 +7,24 @@ import (
 	"licoreria/api/internal/seed"
 )
 
-const clearDemo = `
-	TRUNCATE inventory_movements, purchases, sales, cash_shifts, exchange_rates, products, categories, brands, suppliers CASCADE;
-	DELETE FROM customers WHERE NOT is_walk_in;
-	DELETE FROM registers WHERE invoice_series <> 'F001';
-	UPDATE registers SET next_invoice_number = 1;`
-
 // The demo history must read like real operation: exact kardex, stock never negative, and
 // shift counts that match what the sales say.
 func TestDemoHistoryIsConsistent(t *testing.T) {
 	env := newTestEnv(t)
 	env.createAdmin()
 	ctx := context.Background()
-	if _, err := env.pool.Exec(ctx, clearDemo); err != nil {
+	clear := func() error {
+		if err := seed.Reset(ctx, env.pool); err != nil {
+			return err
+		}
+		_, err := env.pool.Exec(ctx, `DELETE FROM registers WHERE invoice_series <> 'F001'`)
+		return err
+	}
+	if err := clear(); err != nil {
 		t.Fatalf("clear: %v", err)
 	}
 	t.Cleanup(func() {
-		if _, err := env.pool.Exec(ctx, clearDemo); err != nil {
+		if err := clear(); err != nil {
 			t.Errorf("clear: %v", err)
 		}
 	})

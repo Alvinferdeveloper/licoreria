@@ -35,7 +35,12 @@ var (
 	expenses       = []string{"Compra de hielo", "Pago de flete", "Bolsas para despacho", "Limpieza del local"}
 	shortages      = []string{"Faltante en el arqueo, se revisó con el supervisor.", "Vuelto mal entregado en hora pico."}
 	voidReasons    = []string{"Cliente desistió de la compra", "Error al digitar el producto", "Cobro duplicado"}
-	demoCashiers   = []struct{ name, username string }{
+	losses         = []string{"Botella quebrada al acomodar el estante", "Lata golpeada, no apta para la venta", "Empaque roto en bodega"}
+	perishedLoss   = "Producto vencido retirado del estante"
+	// Shelf prices raised mid-history, and the brand whose cost rises in the last weeks.
+	priceRaises   = map[string]int64{"Toña": 500, "Victoria": 500, "Coca-Cola": 300}
+	costRiseBrand = "Flor de Caña"
+	demoCashiers  = []struct{ name, username string }{
 		{"Ana Lucía Treminio", "ana"}, {"Carlos Darce", "carlos"}, {"Yader Espinoza", "yader"},
 	}
 )
@@ -87,6 +92,43 @@ type history struct {
 	today      time.Time
 	voids      []pendingVoid
 	result     *Result
+	costRaised bool
+}
+
+const (
+	counterIP = "192.168.1.20"
+	officeIP  = "192.168.1.35"
+	browser   = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0 Safari/537.36"
+)
+
+// audit writes a bitácora entry with the time it would have had, so the log tells the same story as the data.
+func (h *history) audit(ctx context.Context, user uuid.UUID, action, entity string, entityID *uuid.UUID, before, after any, at time.Time) error {
+	encode := func(v any) ([]byte, error) {
+		if v == nil {
+			return nil, nil
+		}
+		return json.Marshal(v)
+	}
+	b, err := encode(before)
+	if err != nil {
+		return err
+	}
+	a, err := encode(after)
+	if err != nil {
+		return err
+	}
+	ip := counterIP
+	if user == h.admin {
+		ip = officeIP
+	}
+	_, err = h.tx.Exec(ctx, `
+		INSERT INTO audit_log (user_id, action, entity, entity_id, before_data, after_data, ip, user_agent, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7::inet, $8, $9)`, user, action, entity, entityID, b, a, ip, browser, at)
+	return err
+}
+
+func (h *history) login(ctx context.Context, user uuid.UUID, at time.Time) error {
+	return h.audit(ctx, user, "auth.login_succeeded", "users", &user, nil, nil, at)
 }
 
 func storeToday() time.Time {
@@ -218,6 +260,7 @@ func (h *history) loadRegisters(ctx context.Context) error {
 }
 
 // addCashiers creates staff with an unknown temporary password; an administrator resets it to use them.
+// On a reload the existing accounts (and any password already set) are kept.
 func (h *history) addCashiers(ctx context.Context) error {
 	for _, c := range demoCashiers {
 		temporary, err := password.GenerateTemporary()
@@ -231,7 +274,8 @@ func (h *history) addCashiers(ctx context.Context) error {
 		var id uuid.UUID
 		err = h.tx.QueryRow(ctx, `
 			INSERT INTO users (full_name, email, username, password_hash, role_id, activated_at)
-			SELECT $1, $2, $3, $4, id, now() - interval '90 days' FROM roles WHERE code = 'cashier' RETURNING id`,
+			SELECT $1, $2, $3, $4, id, now() - interval '90 days' FROM roles WHERE code = 'cashier'
+			ON CONFLICT (username) DO UPDATE SET full_name = EXCLUDED.full_name RETURNING id`,
 			c.name, c.username+"@example.com", c.username, hash).Scan(&id)
 		if err != nil {
 			return err
@@ -254,16 +298,211 @@ func (h *history) run(ctx context.Context) error {
 				return err
 			}
 		}
+		if n == historyDays/2 {
+			if err := h.raisePrices(ctx, day.Add(8*time.Hour)); err != nil {
+				return err
+			}
+		}
+		if n == 30 {
+			if err := h.addPurchase(ctx, day, "voided"); err != nil {
+				return err
+			}
+		}
 		if err := h.runDay(ctx, day, n, rate); err != nil {
 			return fmt.Errorf("day %s: %w", day.Format(time.DateOnly), err)
+		}
+		if n == historyDays-12 {
+			if err := h.markOffline(ctx, day); err != nil {
+				return err
+			}
 		}
 	}
 	if err := h.addRate(ctx, h.today, baseRate+historyDays*37); err != nil {
 		return err
 	}
+	if err := h.riskEvents(ctx); err != nil {
+		return err
+	}
+	if err := h.runToday(ctx, baseRate+historyDays*37); err != nil {
+		return fmt.Errorf("today: %w", err)
+	}
+	if err := h.addPurchase(ctx, h.today, "draft"); err != nil {
+		return err
+	}
 	for _, r := range h.registers {
 		if _, err := h.tx.Exec(ctx, `UPDATE registers SET next_invoice_number = $2 WHERE id = $1`, r.id, r.next); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// raisePrices moves a few shelf prices up mid-history, the way a liquor store follows its distributors.
+func (h *history) raisePrices(ctx context.Context, at time.Time) error {
+	for brand, step := range priceRaises {
+		rows, err := h.tx.Query(ctx, `
+			UPDATE products p SET price = p.price + $2::numeric FROM brands b
+			WHERE b.id = p.brand_id AND b.name = $1
+			RETURNING p.id, (p.price - $2::numeric)::text, p.price::text`, brand, cents(step))
+		if err != nil {
+			return err
+		}
+		type change struct {
+			id            uuid.UUID
+			before, after string
+		}
+		changes, err := pgx.CollectRows(rows, func(row pgx.CollectableRow) (change, error) {
+			var c change
+			return c, row.Scan(&c.id, &c.before, &c.after)
+		})
+		if err != nil {
+			return err
+		}
+		for _, c := range changes {
+			if err := h.audit(ctx, h.admin, "products.price_changed", "products", &c.id,
+				map[string]string{"price": c.before}, map[string]string{"price": c.after}, at); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// addPurchase leaves a purchase that never reached stock: a voided duplicate or today's draft.
+func (h *history) addPurchase(ctx context.Context, day time.Time, status string) error {
+	sp := h.suppliers[0]
+	var items []*stockItem
+	for _, it := range h.items {
+		if supplierOf(it) == sp.name && (status == "voided" || it.stock <= it.reorder) {
+			items = append(items, it)
+		}
+		if len(items) == 6 {
+			break
+		}
+	}
+	if len(items) == 0 {
+		return nil
+	}
+	var subtotal, tax int64
+	for _, it := range items {
+		line := it.costCents * int64(buyQuantity(it))
+		subtotal += line
+		tax += (line*it.taxHundredths + 5000) / 10000
+	}
+	at := day.Add(9 * time.Hour)
+	invoice, reason, voidedAt := "", "", (*time.Time)(nil)
+	if status == "voided" {
+		invoice, reason = fmt.Sprintf("FP-%05d", 10000+h.result.Purchases*7), "Factura registrada dos veces"
+		v := at.Add(25 * time.Minute)
+		voidedAt = &v
+	}
+	var id uuid.UUID
+	err := h.tx.QueryRow(ctx, `
+		INSERT INTO purchases (supplier_id, supplier_invoice_number, status, purchase_date, subtotal, tax, total, created_by, created_at,
+		                       void_reason, voided_by, voided_at)
+		VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7::numeric, $8, $9, $10, CASE WHEN $11::timestamptz IS NULL THEN NULL ELSE $8::uuid END, $11)
+		RETURNING id`, sp.id, invoice, status, day.Format(time.DateOnly), cents(subtotal), cents(tax), cents(subtotal+tax), h.admin, at,
+		reason, voidedAt).Scan(&id)
+	if err != nil {
+		return err
+	}
+	for _, it := range items {
+		quantity := buyQuantity(it)
+		if _, err := h.tx.Exec(ctx, `
+			INSERT INTO purchase_items (purchase_id, product_id, quantity, unit_cost, subtotal) VALUES ($1, $2, $3, $4::numeric, $5::numeric)`,
+			id, it.id, quantity, cents(it.costCents), cents(it.costCents*int64(quantity))); err != nil {
+			return err
+		}
+	}
+	h.result.Purchases++
+	if err := h.audit(ctx, h.admin, "purchases.created", "purchases", &id, nil, map[string]string{"status": "draft"}, at); err != nil {
+		return err
+	}
+	if voidedAt != nil {
+		return h.audit(ctx, h.admin, "purchases.voided", "purchases", &id,
+			map[string]string{"status": "draft"}, map[string]string{"status": "voided", "reason": reason}, *voidedAt)
+	}
+	return nil
+}
+
+// markOffline replays an evening without internet: those sales were rung up offline and synced at once.
+func (h *history) markOffline(ctx context.Context, day time.Time) error {
+	from, to := day.Add(18*time.Hour), day.Add(19*time.Hour+30*time.Minute)
+	_, err := h.tx.Exec(ctx, `UPDATE sales SET offline_at = created_at WHERE created_at >= $1 AND created_at < $2`, from, to)
+	return err
+}
+
+// riskEvents leaves the traces the cash-risk panel reads: rejected supervisor PINs and a late login.
+func (h *history) riskEvents(ctx context.Context) error {
+	yader, carlos := h.cashiers[2], h.cashiers[1]
+	events := []struct {
+		user       uuid.UUID
+		daysAgo    int
+		hour, min  int
+		permission string
+	}{
+		{yader, 19, 20, 12, "sales:void"}, {yader, 12, 21, 4, "discounts:authorize"},
+		{yader, 6, 19, 47, "discounts:authorize"}, {yader, 2, 20, 31, "sales:void"}, {carlos, 9, 18, 15, "discounts:authorize"},
+	}
+	for _, e := range events {
+		at := h.today.AddDate(0, 0, -e.daysAgo).Add(time.Duration(e.hour)*time.Hour + time.Duration(e.min)*time.Minute)
+		if err := h.audit(ctx, e.user, "authorization.failed", "users", &h.admin, nil, map[string]string{"permission": e.permission}, at); err != nil {
+			return err
+		}
+	}
+	late := h.today.AddDate(0, 0, -5).Add(23*time.Hour + 38*time.Minute)
+	if err := h.login(ctx, yader, late); err != nil {
+		return err
+	}
+	return h.audit(ctx, yader, "auth.login_outside_hours", "users", &yader, nil, nil, late)
+}
+
+// runToday rings up today's sales up to this minute; the shift on duty stays open, Caja 2 stays free.
+func (h *history) runToday(ctx context.Context, rate int64) error {
+	now := time.Now().In(pdfx.Store)
+	day, n := h.today, historyDays
+	opened, handover, closing := day.Add(9*time.Hour+45*time.Minute), day.Add(16*time.Hour), day.Add(22*time.Hour+15*time.Minute)
+	if now.Before(opened.Add(30 * time.Minute)) {
+		return nil
+	}
+	closedBy := func(t time.Time) time.Time {
+		if now.Before(t) {
+			return time.Time{}
+		}
+		return t
+	}
+	morning, err := h.openShift(ctx, h.registers[0], h.cashiers[n%2], opened, closedBy(handover))
+	if err != nil {
+		return err
+	}
+	shifts := []*shift{morning}
+	if !now.Before(handover) {
+		evening, err := h.openShift(ctx, h.registers[0], h.cashiers[(n+1)%2], handover, closedBy(closing))
+		if err != nil {
+			return err
+		}
+		shifts = append(shifts, evening)
+	}
+	for _, at := range h.saleTimes(day) {
+		if !at.Before(now.Add(-5 * time.Minute)) {
+			break
+		}
+		s := shifts[0]
+		if at.Hour() >= 16 && len(shifts) > 1 {
+			s = shifts[1]
+		}
+		if err := h.addSale(ctx, s, at, rate); err != nil {
+			return err
+		}
+	}
+	if err := h.applyVoids(ctx, now); err != nil {
+		return err
+	}
+	for _, s := range shifts {
+		if !s.closedAt.IsZero() {
+			if err := h.closeShift(ctx, s); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -300,9 +539,14 @@ func supplierOf(it *stockItem) string {
 // restock receives one purchase per supplier. Near the end some products are left out,
 // so the demo opens with real reorder alerts.
 func (h *history) restock(ctx context.Context, day time.Time, leaveGaps bool) error {
+	// In the last two weeks the distributor raises its cost: that purchase shows the margin warning.
+	raise := !h.costRaised && h.today.Sub(day) <= 14*24*time.Hour
 	bySupplier := map[string][]*stockItem{}
 	for _, it := range h.items {
-		if it.stock*10 >= it.target*6 || (leaveGaps && stableHash(it.brand+it.category)%3 == 0) {
+		if raise && it.brand == costRiseBrand {
+			it.costCents = it.costCents * 109 / 100
+			h.costRaised = true
+		} else if it.stock*10 >= it.target*6 || (leaveGaps && stableHash(it.brand+it.category)%3 == 0) {
 			continue
 		}
 		name := supplierOf(it)
@@ -316,7 +560,7 @@ func (h *history) restock(ctx context.Context, day time.Time, leaveGaps bool) er
 		}
 		var subtotal, tax int64
 		for _, it := range items {
-			line := it.costCents * int64(it.target-it.stock)
+			line := it.costCents * int64(buyQuantity(it))
 			subtotal += line
 			tax += (line*it.taxHundredths + 5000) / 10000
 		}
@@ -331,9 +575,21 @@ func (h *history) restock(ctx context.Context, day time.Time, leaveGaps bool) er
 		if err != nil {
 			return err
 		}
+		if err := h.audit(ctx, h.admin, "purchases.created", "purchases", &id, nil, map[string]string{"status": "draft"}, at.Add(-20*time.Minute)); err != nil {
+			return err
+		}
+		if err := h.audit(ctx, h.admin, "purchases.received", "purchases", &id,
+			map[string]string{"status": "draft"}, map[string]string{"status": "received", "reason": ""}, at); err != nil {
+			return err
+		}
 		reason := fmt.Sprintf("Compra a %s, factura %s", sp.name, invoice)
 		for _, it := range items {
-			quantity := it.target - it.stock
+			quantity := buyQuantity(it)
+			if _, err := h.tx.Exec(ctx, `
+				UPDATE products SET average_cost = round((GREATEST(stock, 0) * average_cost + $2 * $3::numeric) / (GREATEST(stock, 0) + $2), 4)
+				WHERE id = $1`, it.id, quantity, cents(it.costCents)); err != nil {
+				return err
+			}
 			if _, err := h.tx.Exec(ctx, `
 				INSERT INTO purchase_items (purchase_id, product_id, quantity, unit_cost, subtotal, expires_on)
 				VALUES ($1, $2, $3, $4::numeric, $5::numeric, $6::date)`, id, it.id, quantity, cents(it.costCents), cents(it.costCents*int64(quantity)),
@@ -347,6 +603,9 @@ func (h *history) restock(ctx context.Context, day time.Time, leaveGaps bool) er
 	}
 	return nil
 }
+
+// buyQuantity fills the shelf back to target, never less than a case of six.
+func buyQuantity(it *stockItem) int { return max(it.target-it.stock, 6) }
 
 // expiresOn gives perishable categories a best-before date; spirits keep none. The spread makes
 // some recent lots fall inside the 30–90 day expiry window of the demo.
@@ -368,11 +627,37 @@ func expiresOn(it *stockItem, day time.Time) *string {
 
 func (h *history) move(ctx context.Context, it *stockItem, kind string, quantity int, reason, source string, sourceID uuid.UUID, at time.Time) error {
 	it.stock += quantity
+	var src *uuid.UUID
+	if sourceID != uuid.Nil {
+		src = &sourceID
+	}
 	_, err := h.tx.Exec(ctx, `
 		INSERT INTO inventory_movements (product_id, type, quantity, unit_cost, reason, source_type, source_id, created_by, created_at)
 		VALUES ($1, $2, $3, $4::numeric, $5, $6, $7, $8, $9)`,
-		it.id, kind, quantity, cents(it.costCents), reason, source, sourceID, h.admin, at)
+		it.id, kind, quantity, cents(it.costCents), reason, source, src, h.admin, at)
 	return err
+}
+
+// shrink writes off a broken or expired unit or two, as the bodega does now and then.
+func (h *history) shrink(ctx context.Context, day time.Time) error {
+	it := h.pickItem()
+	if it.stock < 4 {
+		return nil
+	}
+	quantity := 1 + h.rng.IntN(2)
+	reason := losses[h.rng.IntN(len(losses))]
+	if it.category == "Cerveza" || it.category == "Mezcladores" {
+		if h.rng.IntN(2) == 0 {
+			reason = perishedLoss
+		}
+	}
+	// Before opening, while the shelves are checked, so the kardex stays in time order.
+	at := day.Add(9*time.Hour + time.Duration(h.rng.IntN(2400))*time.Second)
+	if err := h.move(ctx, it, "shrinkage", -quantity, reason, "adjustment", uuid.Nil, at); err != nil {
+		return err
+	}
+	return h.audit(ctx, h.admin, "inventory.adjusted", "products", &it.id, nil,
+		map[string]any{"type": "shrinkage", "quantity": -quantity, "stockAfter": it.stock, "reason": reason}, at)
 }
 
 func isPeak(day time.Time) bool {
@@ -415,17 +700,30 @@ func (h *history) saleTimes(day time.Time) []time.Time {
 	return moments
 }
 
+// openShift starts a cashier's shift; a zero closed time leaves it open (today's shift on duty).
 func (h *history) openShift(ctx context.Context, r *register, user uuid.UUID, opened, closed time.Time) (*shift, error) {
 	s := &shift{register: r, user: user, closedAt: closed}
+	status, closedAt := "closed", &closed
+	if closed.IsZero() {
+		status, closedAt = "open", nil
+	}
 	err := h.tx.QueryRow(ctx, `
 		INSERT INTO cash_shifts (register_id, user_id, status, opened_at, closed_at, opening_nio, opening_usd)
-		VALUES ($1, $2, 'closed', $3, $4, $5::numeric, $6::numeric) RETURNING id`,
-		r.id, user, opened, closed, cents(openingNIO), cents(openingUSD)).Scan(&s.id)
+		VALUES ($1, $2, $3, $4, $5, $6::numeric, $7::numeric) RETURNING id`,
+		r.id, user, status, opened, closedAt, cents(openingNIO), cents(openingUSD)).Scan(&s.id)
 	if err != nil {
 		return nil, err
 	}
 	h.result.Shifts++
-	if h.rng.IntN(6) == 0 {
+	if err := h.login(ctx, user, opened.Add(-4*time.Minute)); err != nil {
+		return nil, err
+	}
+	err = h.audit(ctx, user, "cash_shifts.opened", "cash_shifts", &s.id, nil,
+		map[string]string{"register": registerName(r), "openingNio": cents(openingNIO), "openingUsd": cents(openingUSD)}, opened)
+	if err != nil {
+		return nil, err
+	}
+	if h.rng.IntN(6) == 0 && time.Now().After(opened.Add(2*time.Hour)) {
 		s.expense = int64(150+h.rng.IntN(45)*10) * 100
 		_, err = h.tx.Exec(ctx, `
 			INSERT INTO cash_movements (shift_id, type, currency_code, amount, reason, created_by, created_at)
@@ -449,7 +747,27 @@ func (h *history) closeShift(ctx context.Context, s *shift) error {
 		UPDATE cash_shifts SET expected_nio = $2::numeric, expected_usd = $3::numeric, counted_nio = $4::numeric, counted_usd = $5::numeric,
 		       difference_nio = $4::numeric - $2::numeric, difference_usd = $5::numeric - $3::numeric, notes = $6
 		WHERE id = $1`, s.id, cents(expectedNIO), cents(expectedUSD), cents(expectedNIO+diffNIO), cents(expectedUSD+diffUSD), notes)
-	return err
+	if err != nil {
+		return err
+	}
+	return h.audit(ctx, s.user, "cash_shifts.closed", "cash_shifts", &s.id, nil, map[string]string{
+		"expectedNio": cents(expectedNIO), "countedNio": cents(expectedNIO + diffNIO), "differenceNio": signedCents(diffNIO),
+		"expectedUsd": cents(expectedUSD), "countedUsd": cents(expectedUSD + diffUSD), "differenceUsd": signedCents(diffUSD),
+	}, s.closedAt)
+}
+
+func signedCents(v int64) string {
+	if v < 0 {
+		return "-" + cents(-v)
+	}
+	return cents(v)
+}
+
+func registerName(r *register) string {
+	if r.series == "F002" {
+		return "Caja 2"
+	}
+	return "Caja 1"
 }
 
 func (h *history) runDay(ctx context.Context, day time.Time, n int, rate int64) error {
@@ -469,6 +787,11 @@ func (h *history) runDay(ctx context.Context, day time.Time, n int, rate int64) 
 			return err
 		}
 		shifts = append(shifts, extra)
+	}
+	if h.rng.IntN(3) == 0 {
+		if err := h.shrink(ctx, day); err != nil {
+			return err
+		}
 	}
 	for _, at := range h.saleTimes(day) {
 		s := morning
@@ -600,6 +923,10 @@ func (h *history) applyVoids(ctx context.Context, until time.Time) error {
 		reason := voidReasons[h.rng.IntN(len(voidReasons))]
 		_, err := h.tx.Exec(ctx, `UPDATE sales SET status = 'voided', voided_at = $2, voided_by = $3, void_reason = $4 WHERE id = $1`, v.id, v.at, h.admin, reason)
 		if err != nil {
+			return err
+		}
+		if err := h.audit(ctx, h.admin, "sales.voided", "sales", &v.id, nil,
+			map[string]any{"invoice": v.invoice, "reason": reason, "authorizedBy": h.admin}, v.at); err != nil {
 			return err
 		}
 		for _, u := range v.sold {

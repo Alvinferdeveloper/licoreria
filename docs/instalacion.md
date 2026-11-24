@@ -46,9 +46,24 @@ podman compose exec api api seed-demo
 docker compose exec api api seed-demo
 ```
 
-Carga 203 productos, clientes, proveedores, los datos del negocio y 90 días de ventas, turnos y compras hasta ayer. Solo funciona con el catálogo vacío. No la uses en un negocio real.
+Carga 203 productos, clientes, proveedores y los datos del negocio. También simula 90 días de operación:
+- ventas con anulaciones, descuentos, pagos en dólares, con tarjeta y por transferencia, y una noche sin conexión;
+- turnos con egresos y faltantes, compras con fechas de vencimiento y mermas;
+- un alza de precios y una subida de costo de Flor de Caña;
+- la bitácora completa.
+
+Además, deja las ventas de hoy hasta la hora actual con un turno abierto en Caja 1 (Caja 2 queda libre para vender en la presentación), un borrador de compra y algunos PIN rechazados para el panel de riesgos. Solo funciona con el catálogo vacío. No la uses en un negocio real.
 
 Crea además los cajeros `ana`, `carlos` y `yader`, sin contraseña conocida. Para usarlos, reenvía su acceso desde **Usuarios**.
+
+Para volver a cargarla con la fecha de hoy (por ejemplo, justo antes de una presentación):
+
+```sh
+podman compose exec api api seed-demo -reset
+docker compose exec api api seed-demo -reset
+```
+
+`-reset` **borra** el catálogo, las ventas, los turnos, las compras, los clientes y la bitácora. Conserva usuarios, roles, cajas, configuración y respaldos. Tarda unos 15 segundos.
 
 **5. Entra:**
 
