@@ -110,6 +110,8 @@ Solo el Administrador ve los costos y cambia precios.
 
 Una compra recibida se puede anular mientras su stock siga disponible.
 
+**Márgenes:** debajo de cada costo aparece el de la compra anterior. Si un producto subió de costo, el panel **Márgenes** muestra cuánto subió y cómo baja tu margen con el precio de venta actual, por ejemplo "Margen 29 % → 20.5 %". También propone el precio que mantiene el margen anterior, redondeado al córdoba. Lo puedes ajustar y pulsar **Actualizar**. Solo cambia el precio de venta y queda en la bitácora. Las ventas ya hechas conservan su precio. Si no tienes permiso para cambiar precios, el panel solo avisa.
+
 **Existencias y kardex (Inventario > Existencias y kardex):**
 
 - **Pronóstico:** con lo vendido en los últimos 28 días (la última semana pesa más), calcula cuántos días le quedan a cada producto y cuánto pedir para cubrir 7, 14 o 30 días más su mínimo. La cantidad se redondea a la presentación más pequeña (por ejemplo, six-packs completos). Cada producto se marca como **Agotado**, **Crítico** (3 días o menos), **Pronto** o **Bajo mínimo**, con un mini gráfico de sus ventas diarias. Los productos se agrupan por el proveedor de su última compra, y **Crear borrador de compra** arma la compra con esas cantidades y el último costo para revisarla antes de recibirla.

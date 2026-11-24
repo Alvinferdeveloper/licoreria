@@ -16,6 +16,9 @@ export interface PurchaseItem {
   taxPercent: string;
   /** Unit cost of the product's previous received purchase, to compare prices. */
   previousCost: string | null;
+  salePrice: string;
+  /** The sale price was changed after this purchase was created. */
+  priceUpdated: boolean;
   expiresOn: string | null;
 }
 

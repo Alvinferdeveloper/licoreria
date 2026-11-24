@@ -205,6 +205,29 @@ func (s *Service) SetActive(ctx context.Context, actor auth.Principal, id uuid.U
 	return present(actor, updated), err
 }
 
+// SetPrice changes only the sale price, e.g. after a supplier raised the cost.
+func (s *Service) SetPrice(ctx context.Context, actor auth.Principal, id uuid.UUID, price string) (Product, error) {
+	if !canSeeCosts(actor) {
+		return Product{}, ErrPriceChangeForbidden
+	}
+	var updated Product
+	err := database.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
+		before, err := s.repo.get(ctx, tx, id)
+		if err != nil {
+			return err
+		}
+		if err := s.repo.setPrice(ctx, tx, id, price); err != nil {
+			return err
+		}
+		if updated, err = s.repo.get(ctx, tx, id); err != nil {
+			return err
+		}
+		return audit.Record(ctx, tx, audit.Entry{UserID: &actor.UserID, Action: "products.price_changed", Entity: "products", EntityID: &id,
+			Before: map[string]string{"price": before.Price}, After: map[string]string{"price": updated.Price}})
+	})
+	return present(actor, updated), err
+}
+
 // SetImage uploads to Supabase first and only then points the product at it; the previous
 // image is removed after the change commits.
 func (s *Service) SetImage(ctx context.Context, actor auth.Principal, id uuid.UUID, data []byte) (Product, error) {

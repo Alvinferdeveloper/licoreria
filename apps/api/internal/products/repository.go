@@ -383,6 +383,17 @@ func (Repository) setActive(ctx context.Context, db database.DBTX, id uuid.UUID,
 	return nil
 }
 
+func (Repository) setPrice(ctx context.Context, db database.DBTX, id uuid.UUID, price string) error {
+	tag, err := db.Exec(ctx, `UPDATE products SET price = $2::numeric WHERE id = $1`, id, price)
+	if err != nil {
+		return database.MapError(err, nil)
+	}
+	if tag.RowsAffected() == 0 {
+		return database.MapError(pgx.ErrNoRows, nil)
+	}
+	return nil
+}
+
 func (Repository) setImage(ctx context.Context, db database.DBTX, id uuid.UUID, url *string) (*string, error) {
 	var previous *string
 	err := db.QueryRow(ctx, `

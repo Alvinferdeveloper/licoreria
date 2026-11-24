@@ -475,6 +475,19 @@ paths:
       responses:
         '200': { $ref: '#/components/responses/Product' }
         default: { $ref: '#/components/responses/Error' }
+  /products/{id}/price:
+    parameters:
+      - { $ref: '#/components/parameters/Id' }
+    patch:
+      tags: [Catálogo]
+      summary: Cambiar solo el precio de venta
+      description: 'Permiso: `products:update` y `products:authorize`. Queda en la bitácora como `products.price_changed`.'
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [price], properties: { price: { $ref: '#/components/schemas/Money' } } } } }
+      responses:
+        '200': { $ref: '#/components/responses/Product' }
+        default: { $ref: '#/components/responses/Error' }
   /products/{id}/image:
     parameters:
       - { $ref: '#/components/parameters/Id' }
@@ -1611,6 +1624,8 @@ components:
               subtotal: { $ref: '#/components/schemas/Money' }
               taxPercent: { type: string }
               previousCost: { type: [string, 'null'] }
+              salePrice: { $ref: '#/components/schemas/Money' }
+              priceUpdated: { type: boolean, description: 'El precio de venta cambió después de crear la compra.' }
               expiresOn: { type: [string, 'null'], format: date }
     PurchasePage:
       type: object

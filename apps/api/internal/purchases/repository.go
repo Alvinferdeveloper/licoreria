@@ -44,6 +44,8 @@ type Item struct {
 	Subtotal     string     `json:"subtotal"`
 	TaxPercent   string     `json:"taxPercent"`
 	PreviousCost *string    `json:"previousCost"`
+	SalePrice    string     `json:"salePrice"`
+	PriceUpdated bool       `json:"priceUpdated"`
 	ExpiresOn    *string    `json:"expiresOn"`
 }
 
@@ -154,13 +156,17 @@ func (repository) get(ctx context.Context, db database.DBTX, id uuid.UUID, lock 
 		SELECT COALESCE(json_agg(json_build_object(
 			'id', pi.id, 'product', json_build_object('id', p.id, 'sku', p.sku, 'name', p.name),
 			'quantity', pi.quantity, 'unitCost', pi.unit_cost::text, 'subtotal', pi.subtotal::text,
-			'taxPercent', p.tax_percent::text, 'expiresOn', pi.expires_on,
+			'taxPercent', p.tax_percent::text, 'expiresOn', pi.expires_on, 'salePrice', p.price::text,
+			'priceUpdated', EXISTS (SELECT 1 FROM audit_log a
+			                        WHERE a.entity = 'products' AND a.entity_id = p.id AND a.created_at > pu.created_at
+			                          AND a.action IN ('products.price_changed', 'products.updated')
+			                          AND (a.before_data->>'price')::numeric IS DISTINCT FROM (a.after_data->>'price')::numeric),
 			'previousCost', (SELECT prev.unit_cost::text FROM purchase_items prev
 			                 JOIN purchases pp ON pp.id = prev.purchase_id AND pp.status = 'received'
 			                 WHERE prev.product_id = pi.product_id AND pp.id <> pi.purchase_id
 			                 ORDER BY pp.received_at DESC LIMIT 1)
 		) ORDER BY p.name), '[]')
-		FROM purchase_items pi JOIN products p ON p.id = pi.product_id
+		FROM purchase_items pi JOIN products p ON p.id = pi.product_id JOIN purchases pu ON pu.id = pi.purchase_id
 		WHERE pi.purchase_id = $1`, id).Scan(&raw)
 	if err != nil {
 		return Purchase{}, fmt.Errorf("load purchase items: %w", err)

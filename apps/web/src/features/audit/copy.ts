@@ -89,6 +89,7 @@ export const auditCopy = {
     "inventory.adjusted": "Ajustó inventario",
     "products.created": "Creó un producto",
     "products.updated": "Editó un producto",
+    "products.price_changed": "Cambió un precio de venta",
     "products.status_changed": "Activó o desactivó un producto",
     "products.image_changed": "Cambió la imagen de un producto",
     "products.imported": "Importó productos",

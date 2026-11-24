@@ -17,16 +17,16 @@ import { Field, Input, inputClassName } from "@/components/ui/field";
 import { Sheet } from "@/components/ui/sheet";
 import { can } from "@/features/auth/api";
 import { useSession } from "@/features/auth/session-store";
-import { amountToCents, catalogKeys, type Product } from "@/features/catalog/api";
+import { amountToCents, catalogApi, catalogKeys, type Product } from "@/features/catalog/api";
 import { ProductPicker } from "@/features/catalog/components/product-picker";
 import { ApiError } from "@/lib/api/client";
 import { applyApiError } from "@/lib/api/form-errors";
 import { cn } from "@/lib/cn";
 import { formatDate, formatDateTime, todayISO } from "@/lib/format/date";
-import { formatAmount, parseAmount } from "@/lib/money";
+import { formatAmount, parseAmount, toAmountString } from "@/lib/money";
 import { purchaseKeys, purchasesApi, type Purchase, type PurchaseInput } from "../api";
 import { purchasesCopy } from "../copy";
-import { costChange, purchaseTotals } from "../domain";
+import { costChange, marginImpact, purchaseTotals, type MarginImpact } from "../domain";
 import { PurchaseStatusBadge } from "./purchase-status-badge";
 
 const { editor: copy, validation: v, notices } = purchasesCopy;
@@ -48,6 +48,8 @@ const schema = z.object({
         quantity: z.string().trim().regex(/^\d{1,6}$/, v.quantity).refine((s) => Number(s) > 0, v.quantity),
         unitCost: z.string().trim().regex(moneyPattern, v.cost),
         expiresOn: z.string(),
+        salePrice: z.string(),
+        priceUpdated: z.boolean(),
       }),
     )
     .min(1, v.lines),
@@ -74,6 +76,8 @@ function toValues(p: Purchase | undefined): Values {
       quantity: String(i.quantity),
       unitCost: costText(i.unitCost),
       expiresOn: i.expiresOn ?? "",
+      salePrice: i.salePrice,
+      priceUpdated: i.priceUpdated,
     })),
   };
 }
@@ -160,7 +164,7 @@ function EditorForm({ purchase, suppliers }: { purchase: Purchase | undefined; s
 
   const addProduct = (product: Product) => {
     const cost = product.averageCost && Number(product.averageCost) > 0 ? costText(product.averageCost) : "";
-    lines.append({ productId: product.id, name: product.name, sku: product.sku, taxPercent: product.taxPercent, reference: null, quantity: "1", unitCost: cost, expiresOn: "" });
+    lines.append({ productId: product.id, name: product.name, sku: product.sku, taxPercent: product.taxPercent, reference: null, quantity: "1", unitCost: cost, expiresOn: "", salePrice: product.price, priceUpdated: false });
   };
 
   const title = purchase ? copy.title(purchase.supplier.name) : copy.newTitle;
@@ -245,6 +249,7 @@ function EditorForm({ purchase, suppliers }: { purchase: Purchase | undefined; s
 
         <aside className="space-y-4 xl:sticky xl:top-6 xl:self-start">
           <Totals control={control} />
+          {purchase?.status !== "voided" && <MarginPanel control={control} canChangePrice={can(me, "products:authorize")} />}
           {editable && canEdit && (
             <div className="space-y-2">
               <ConfirmButton variant="primary" className="w-full" confirmLabel={copy.confirmReceive} disabled={busy} onConfirm={() => void receive()}>
@@ -377,6 +382,90 @@ function Totals({ control }: { control: Control<Values> }) {
         <dd className="text-title font-semibold"><Money cents={totals.total} className="font-mono" /></dd>
       </div>
     </dl>
+  );
+}
+
+const percent = (ratio: number) => (ratio * 100).toFixed(1).replace(/\.0$/, "");
+
+/** Lines whose cost went up, with the margin left at the current sale price and a quick price fix. */
+function MarginPanel({ control, canChangePrice }: { control: Control<Values>; canChangePrice: boolean }) {
+  const items = (useWatch({ control, name: "items" }) ?? []) as Line[];
+  const impacted = items.flatMap((line) => {
+    const cost = parseAmount(line.unitCost ?? "");
+    const impact = cost === null ? null : marginImpact(cost, line.reference ? amountToCents(line.reference) : null, amountToCents(line.salePrice));
+    return impact ? [{ line, impact }] : [];
+  });
+  if (impacted.length === 0) return null;
+  return (
+    <section className="space-y-3 rounded-lg border border-line bg-surface p-5">
+      <div>
+        <h2 className="font-semibold">{purchasesCopy.margins.title}</h2>
+        <p className="mt-1 text-caption text-ink-muted">{purchasesCopy.margins.intro(impacted.length)}</p>
+      </div>
+      <ul className="divide-y divide-line">
+        {impacted.map(({ line, impact }) => (
+          <MarginRow key={`${line.productId}-${impact.suggested}`} line={line} impact={impact} canChangePrice={canChangePrice} />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function MarginRow({ line, impact, canChangePrice }: { line: Line; impact: MarginImpact; canChangePrice: boolean }) {
+  const m = purchasesCopy.margins;
+  const queryClient = useQueryClient();
+  const [price, setPrice] = useState(toAmountString(impact.suggested));
+  const [error, setError] = useState<string | null>(null);
+  const mutation = useMutation({
+    mutationFn: (amount: string) => catalogApi.setProductPrice(line.productId, amount),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: catalogKeys.products }),
+    onError: (e) => setError(e instanceof ApiError ? e.message : m.invalid),
+  });
+
+  // Lives inside the editor's <form>, so it submits with a plain button and Enter, not a nested form.
+  const apply = () => {
+    const cents = parseAmount(price);
+    if (cents === null || cents <= 0) return setError(m.invalid);
+    setError(null);
+    mutation.mutate(toAmountString(cents));
+  };
+
+  return (
+    <li className="space-y-1.5 py-3 first:pt-0 last:pb-0">
+      <p className="font-medium leading-snug">{line.name}</p>
+      <p className="text-caption">
+        <span className="text-danger">{m.cost(percent(impact.change))}</span>
+        <span className="text-ink-muted"> · {line.priceUpdated ? m.marginNow(percent(impact.after)) : m.margin(percent(impact.before), percent(impact.after))}</span>
+      </p>
+      {mutation.isSuccess ? (
+        <p className="text-caption font-medium text-success">{m.updated(formatAmount(amountToCents(mutation.data.price)))}</p>
+      ) : line.priceUpdated ? (
+        <p className="text-caption text-ink-muted">{m.alreadyUpdated}</p>
+      ) : canChangePrice ? (
+        <div className="space-y-1">
+          <div className="flex gap-2">
+            <Input
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key !== "Enter") return;
+                e.preventDefault();
+                apply();
+              }}
+              inputMode="decimal"
+              aria-label={m.suggestedLabel(line.name)}
+              className="h-9 min-w-0 flex-1 text-right font-mono tabular"
+            />
+            <Button size="sm" className="h-9" loading={mutation.isPending} onClick={apply}>
+              {m.apply}
+            </Button>
+          </div>
+          <p className={cn("text-caption", error ? "text-danger" : "text-ink-muted")}>{error ?? m.current(formatAmount(amountToCents(line.salePrice)))}</p>
+        </div>
+      ) : (
+        <p className="text-caption text-ink-muted">{m.noPermission}</p>
+      )}
+    </li>
   );
 }
 

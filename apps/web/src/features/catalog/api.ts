@@ -131,6 +131,7 @@ export const catalogApi = {
   },
   updateProduct: (id: string, input: ProductInput) => api<Product>("PUT", `/products/${id}`, { body: input }),
   setProductActive: (id: string, active: boolean) => api<Product>("PATCH", `/products/${id}/status`, { body: { active } }),
+  setProductPrice: (id: string, price: string) => api<Product>("PATCH", `/products/${id}/price`, { body: { price } }),
   uploadImage: (id: string, file: File) => {
     const form = new FormData();
     form.set("image", file);

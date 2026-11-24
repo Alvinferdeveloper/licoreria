@@ -31,6 +31,7 @@ func (h *Handler) Routes(r chi.Router) {
 		r.With(auth.Require("products", "view")).Get("/{id}", h.get)
 		r.With(auth.Require("products", "update")).Put("/{id}", h.update)
 		r.With(auth.Require("products", "delete")).Patch("/{id}/status", h.setStatus)
+		r.With(auth.Require("products", "update")).Patch("/{id}/price", h.setPrice)
 		r.With(auth.Require("products", "update")).Post("/{id}/image", h.uploadImage)
 		r.With(auth.Require("products", "update")).Delete("/{id}/image", h.removeImage)
 	})
@@ -223,6 +224,30 @@ func (h *Handler) setStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	p, _ := auth.FromContext(r.Context())
 	product, err := h.svc.SetActive(r.Context(), p, id, *req.Active)
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	httpx.JSON(w, r, http.StatusOK, product)
+}
+
+type priceRequest struct {
+	Price string `json:"price" validate:"required,money"`
+}
+
+func (h *Handler) setPrice(w http.ResponseWriter, r *http.Request) {
+	id, err := httpx.URLParamUUID(r, "id")
+	if err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	var req priceRequest
+	if err := httpx.Bind(w, r, &req); err != nil {
+		httpx.Fail(w, r, err)
+		return
+	}
+	p, _ := auth.FromContext(r.Context())
+	product, err := h.svc.SetPrice(r.Context(), p, id, req.Price)
 	if err != nil {
 		httpx.Fail(w, r, err)
 		return
