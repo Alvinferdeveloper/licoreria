@@ -51,8 +51,11 @@ jobs:
         run: go vet ./...
       - name: Test
         run: go test -race ./...
+      # On an empty database: the test database already holds rows that block rolling back.
       - name: Migrations up, down and up again
         run: |
+          psql "postgres://licoreria:ci-password@localhost:5432/licoreria" -c "CREATE DATABASE migrations_check"
+          export DATABASE_URL="postgres://licoreria:ci-password@localhost:5432/migrations_check?sslmode=disable"
           go build -o bin/api ./cmd/api
           ./bin/api migrate up
           for i in $(seq 1 "$(ls migrations/*.up.sql | wc -l)"); do ./bin/api migrate down; done
