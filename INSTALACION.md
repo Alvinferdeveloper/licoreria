@@ -1,6 +1,6 @@
 # Añejo: guía de instalación
 
-Añejo es un sistema de punto de venta e inventario para licorerías. Todo corre en contenedores, así que no hace falta instalar Go, Node.js ni PostgreSQL: solo un motor de contenedores.
+Añejo es un sistema de punto de venta e inventario para licorerías. La forma recomendada es con contenedores: no hace falta instalar Go, Node.js ni PostgreSQL, solo un motor de contenedores. Si prefieres instalar cada pieza a mano, sigue la sección [Instalación sin Docker](#instalación-sin-docker-manual) al final.
 
 ## Requisitos
 
@@ -131,6 +131,112 @@ docker compose up -d
 | `port is already allocated` | Otro programa usa ese puerto. En `.env` cambia `WEB_PORT=3000` por otro, por ejemplo `3002`, y también `APP_BASE_URL` y `CORS_ALLOWED_ORIGINS` a `http://localhost:3002`. Luego repite el paso 3 |
 | La aplicación no carga justo después de levantar | La primera vez la API tarda unos segundos en preparar la base; espera y recarga |
 | Con Podman en Windows: `cannot connect to Podman` | Inicia la máquina virtual con `podman machine start` |
+| Sin Docker: la API muestra `DATABASE_URL is required` o `JWT_SECRET must be at least 32 bytes` | Las variables se definen en la misma terminal donde corres `go run`; si abriste otra terminal, defínelas de nuevo |
+| Sin Docker: `backup failed` con `pg_dump: executable file not found` | Agrega la carpeta `bin` de PostgreSQL 16 al `PATH` y abre una terminal nueva. El resto del sistema funciona igual |
+| Sin Docker: `permission denied to create extension` | Crea las extensiones como el usuario `postgres`, como en el paso 1 |
+
+## Instalación sin Docker (manual)
+
+Corre las tres piezas directamente en tu computadora: PostgreSQL, la API en Go y la web en Next.js.
+
+### Requisitos
+
+| Programa | Versión | Descarga |
+| --- | --- | --- |
+| PostgreSQL | **16** | <https://www.postgresql.org/download/> |
+| Go | 1.27 o superior | <https://go.dev/dl/> |
+| Node.js | 22 o superior | <https://nodejs.org/> |
+| pnpm | 10 | En una terminal: `npm install -g pnpm@10` |
+
+Al instalar PostgreSQL en Windows, anota la contraseña del usuario `postgres`. Para que funcionen los respaldos, la carpeta `bin` de PostgreSQL (por ejemplo `C:\Program Files\PostgreSQL\16\bin`) debe estar en el `PATH`, porque la API usa `pg_dump`, `pg_restore` y `psql`.
+
+### 1. Crear la base de datos
+
+Abre una terminal y entra a PostgreSQL como administrador:
+
+```sh
+psql -U postgres
+```
+
+Dentro de `psql`, crea el usuario y la base de datos (cambia la contraseña por una tuya):
+
+```sql
+CREATE USER licoreria WITH PASSWORD 'UnaClaveSegura2026';
+CREATE DATABASE licoreria OWNER licoreria;
+\c licoreria
+CREATE EXTENSION IF NOT EXISTS citext;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE EXTENSION IF NOT EXISTS unaccent;
+\q
+```
+
+Las tablas no se crean a mano: la API aplica las migraciones sola al arrancar. Las extensiones se crean aquí porque requieren permisos de administrador.
+
+### 2. Arrancar la API
+
+Abre una terminal en la carpeta `apps/api` del proyecto y define las variables. La API no lee el archivo `.env`, así que van en la terminal.
+
+**Windows (PowerShell):**
+
+```powershell
+$env:DATABASE_URL = "postgres://licoreria:UnaClaveSegura2026@localhost:5432/licoreria?sslmode=disable"
+$env:JWT_SECRET   = "escribe-aqui-un-texto-aleatorio-de-al-menos-32-caracteres"
+$env:BACKUP_DIR   = "./backups"
+go run ./cmd/api
+```
+
+**macOS o Linux:**
+
+```sh
+export DATABASE_URL="postgres://licoreria:UnaClaveSegura2026@localhost:5432/licoreria?sslmode=disable"
+export JWT_SECRET="escribe-aqui-un-texto-aleatorio-de-al-menos-32-caracteres"
+export BACKUP_DIR="./backups"
+go run ./cmd/api
+```
+
+La primera vez descarga las dependencias y tarda un poco. Está lista cuando muestra `api listening` con `addr=:8080`. Deja esa terminal abierta.
+
+### 3. Crear el administrador y cargar la demo
+
+En **otra** terminal, también en `apps/api` y con las mismas dos variables (`DATABASE_URL` y `JWT_SECRET`) definidas:
+
+```sh
+go run ./cmd/api create-admin -name "Administrador" -email admin@anejo.local -username admin
+go run ./cmd/api seed-demo
+```
+
+El primero muestra la contraseña temporal del administrador una sola vez. El segundo carga los datos de demostración (opcional).
+
+### 4. Arrancar la web
+
+En una tercera terminal, en la carpeta **raíz** del proyecto (la que contiene `package.json`):
+
+```sh
+pnpm install
+pnpm dev:web
+```
+
+Entra a <http://localhost:3000> con el usuario `admin` y la contraseña temporal.
+
+La web le pasa las peticiones a la API en `http://localhost:8080`. Si la API corre en otro puerto, define antes `API_ORIGIN` (por ejemplo, en PowerShell: `$env:API_ORIGIN = "http://localhost:8090"`) y, en la API, `HTTP_ADDR=":8090"`. Si el puerto 3000 está ocupado, define `PORT` antes de `pnpm dev:web` (por ejemplo, `$env:PORT = "3005"`).
+
+### Correo sin Docker
+
+Sin Docker no está el buzón de prueba Mailpit, así que las invitaciones y alertas no llegan a ningún lado. El sistema funciona igual:
+
+- Crea los usuarios **sin correo**: el sistema muestra un código de acceso para activarlos desde **Activa tu cuenta**.
+- O instala Mailpit (<https://mailpit.axllent.org/>, un solo ejecutable); la API le envía los correos en `localhost:1025` y se ven en <http://localhost:8025>.
+- O configura un correo real con `RESEND_API_KEY` o las variables `SMTP_*` (ver `.env.example`).
+
+### Alternativa: crear la base con un script
+
+Si prefieres crear todas las tablas con SQL en lugar de dejar que la API aplique las migraciones, ejecuta `base-de-datos.sql` (incluido en la entrega) sobre la base vacía, después del paso 1:
+
+```sh
+psql -U licoreria -d licoreria -f base-de-datos.sql
+```
+
+Crea la estructura completa, los datos base y la versión de las migraciones, así que la API la reconoce y no vuelve a crear nada.
 
 ## Más documentación
 
