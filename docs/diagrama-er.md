@@ -1,6 +1,23 @@
 # Diagrama entidad-relación
 
-Base de datos PostgreSQL 16 con 33 tablas, creadas por las migraciones de `apps/api/migrations`. El modelo se divide por dominio para que cada diagrama se pueda leer; las tablas que se repiten son el punto de unión entre dominios. Solo se muestran las columnas clave.
+Base de datos PostgreSQL 16 con 33 tablas y 49 relaciones, creadas por las migraciones de `apps/api/migrations`.
+
+## Diagrama completo
+
+![Diagrama entidad-relación completo](diagrama-er.png)
+
+- [Versión PDF](diagrama-er.pdf), vectorial: se amplía sin perder calidad y sirve para imprimir en A3 apaisado.
+- [Fuente DBML](diagrama-er.dbml), generada desde la base de datos real. Se abre en [dbdiagram.io](https://dbdiagram.io) (Import → DBML) para moverlo o exportarlo a otro formato.
+
+Cómo leerlo:
+
+- Cada color es un dominio. Las líneas van de la llave foránea (pata de gallo, "muchos") a la llave primaria ("uno").
+- Las columnas de auditoría que apuntan a `users` desde otros dominios (`created_by`, `voided_by`, `authorized_by`...) llevan la etiqueta **→ users** en lugar de una línea, para que el diagrama se pueda leer. Son 14 de las 49 relaciones.
+- ○ indica que la columna admite nulo.
+
+## Por dominio
+
+Cada diagrama muestra solo las columnas clave; las tablas que se repiten son el punto de unión entre dominios.
 
 Decisiones de diseño:
 
@@ -9,7 +26,7 @@ Decisiones de diseño:
 - **Todo monto en córdobas.** Cada pago conserva su moneda original, la tasa usada y el equivalente en `amount_nio`.
 - **La bitácora es de solo agregar.** Un trigger impide modificar o borrar `audit_log`.
 
-## Seguridad y usuarios
+### Seguridad y usuarios
 
 ```mermaid
 erDiagram
@@ -75,7 +92,7 @@ erDiagram
     }
 ```
 
-## Catálogo e inventario
+### Catálogo e inventario
 
 ```mermaid
 erDiagram
@@ -159,7 +176,7 @@ erDiagram
     }
 ```
 
-## Caja y ventas
+### Caja y ventas
 
 ```mermaid
 erDiagram
@@ -273,7 +290,7 @@ erDiagram
 
 Las tablas `returns` y `return_items` existen en el esquema, pero el sistema no registra devoluciones: quedaron fuera del alcance de esta versión.
 
-## Sistema
+### Sistema
 
 ```mermaid
 erDiagram
