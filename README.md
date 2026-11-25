@@ -24,7 +24,7 @@ licoreria/
 │   └── api/        # API REST en Go (ver apps/api/README.md)
 ├── compose.yaml    # todos los servicios (Podman o Docker)
 ├── deploy/         # proxy HTTPS
-├── docs/           # instalación, manual de usuario, diagrama ER, guion de demo
+├── docs/           # instalación, manual de usuario, diagrama ER, respaldos
 └── .github/        # CI
 ```
 
