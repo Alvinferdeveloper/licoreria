@@ -37,6 +37,14 @@ jobs:
         with:
           go-version-file: apps/api/go.mod
           cache-dependency-path: apps/api/go.sum
+      # Backup tests run pg_dump/pg_restore/psql: they must match the server's major version,
+      # or newer clients emit settings PostgreSQL 16 rejects (e.g. transaction_timeout).
+      - name: PostgreSQL 16 client
+        run: |
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-client-16
+          echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
       - name: Format
         run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
       - name: Vet
