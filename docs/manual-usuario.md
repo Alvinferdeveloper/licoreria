@@ -18,7 +18,7 @@ Añejo es el sistema de punto de venta, inventario y facturación de la licorer�
    El enlace y el código sirven una sola vez y vencen en 72 horas.
 3. Si la olvidaste y tienes correo, usa **¿La olvidaste?** y sigue el enlace del correo. Si no tienes correo, pide al administrador un código de acceso nuevo.
 
-Tras varios intentos fallidos la cuenta se bloquea unos minutos. La sesión se cierra sola si queda inactiva. Si el negocio activó un horario de uso, fuera de él solo entran quienes tengan permiso; el mensaje dice a qué hora se habilita de nuevo.
+Tras varios intentos fallidos la cuenta se bloquea unos minutos. La sesión se cierra sola tras 30 minutos sin usar el mouse, el teclado ni la pantalla táctil, y la pantalla de inicio explica por qué. Si se cae la conexión, la sesión no se cierra, para que el mostrador pueda seguir vendiendo. Si el negocio activó un horario de uso, fuera de él solo entran quienes tengan permiso; el mensaje dice a qué hora se habilita de nuevo.
 
 Si tienes correo, el sistema te avisa cuando tu contraseña cambia, cuando tu cuenta se bloquea y cuando entras fuera de horario. Si no fuiste tú, avisa al administrador de inmediato. Los administradores reciben aviso de cada cuenta bloqueada, de los intentos de entrar fuera de horario (uno por persona cada hora) y de cualquier fallo del respaldo automático.
 

@@ -8,6 +8,7 @@ export const authCopy = {
     forgot: "¿La olvidaste?",
     submit: "Entrar",
     hasCode: "¿Te dieron un código de acceso?",
+    idleClosed: "Tu sesión se cerró por inactividad. Inicia sesión de nuevo.",
     activate: "Activa tu cuenta",
   },
   activate: {

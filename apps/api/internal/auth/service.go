@@ -31,6 +31,7 @@ var (
 	ErrInvalidCredentials = apperr.New(apperr.KindUnauthorized, "invalid_credentials", "Usuario o contraseña incorrectos.")
 	ErrTemporaryExpired   = apperr.New(apperr.KindUnauthorized, "temporary_password_expired", "Tu contraseña temporal venció. Pide al administrador que te reenvíe el acceso.")
 	ErrSessionExpired     = apperr.New(apperr.KindUnauthorized, "session_expired", "Tu sesión terminó. Inicia sesión de nuevo.")
+	ErrSessionIdle        = apperr.New(apperr.KindUnauthorized, "session_idle", "Tu sesión se cerró por inactividad. Inicia sesión de nuevo.")
 	ErrInvalidResetToken  = apperr.New(apperr.KindInvalid, "invalid_reset_token", "El enlace no es válido o ya venció. Solicita uno nuevo.")
 
 	ErrWrongPassword = apperr.Validation(apperr.FieldError{
@@ -138,7 +139,7 @@ func (s *Service) Login(ctx context.Context, identifier, plainPassword string) (
 		if err := s.repo.recordSuccessfulLogin(ctx, tx, creds.UserID); err != nil {
 			return err
 		}
-		session, err = s.startSession(ctx, tx, creds.UserID)
+		session, err = s.startSession(ctx, tx, creds.UserID, nil)
 		if err != nil {
 			return err
 		}
@@ -204,13 +205,18 @@ func (s *Service) auditFailure(ctx context.Context, userID *uuid.UUID, identifie
 	}
 }
 
-func (s *Service) startSession(ctx context.Context, db database.DBTX, userID uuid.UUID) (Session, error) {
+// startSession opens a session; lastSeen carries over the activity of a rotated session.
+func (s *Service) startSession(ctx context.Context, db database.DBTX, userID uuid.UUID, lastSeen *time.Time) (Session, error) {
+	security, err := settings.GetSecurity(ctx, db)
+	if err != nil {
+		return Session{}, err
+	}
 	refreshPlain, refreshHash, err := NewOpaqueToken()
 	if err != nil {
 		return Session{}, err
 	}
 	refreshExpiresAt := s.now().Add(s.cfg.RefreshTokenTTL)
-	sessionID, err := s.repo.createSession(ctx, db, userID, refreshHash, refreshExpiresAt)
+	sessionID, err := s.repo.createSession(ctx, db, userID, refreshHash, refreshExpiresAt, lastSeen)
 	if err != nil {
 		return Session{}, err
 	}
@@ -219,13 +225,14 @@ func (s *Service) startSession(ctx context.Context, db database.DBTX, userID uui
 	if err != nil {
 		return Session{}, err
 	}
-	principal, ok, err := s.repo.loadPrincipal(ctx, db, userID, sessionID)
+	principal, ok, err := s.repo.loadPrincipal(ctx, db, userID, sessionID, security.Idle())
 	if err != nil {
 		return Session{}, err
 	}
 	if !ok {
 		return Session{}, ErrSessionExpired
 	}
+	principal.IdleTimeoutMinutes = max(security.IdleTimeoutMinutes, 0)
 	return Session{
 		AccessToken: accessToken, AccessExpiresAt: accessExpiresAt,
 		RefreshToken: refreshPlain, RefreshExpiresAt: refreshExpiresAt,
@@ -242,6 +249,7 @@ func (s *Service) Refresh(ctx context.Context, refreshPlain string) (Session, er
 
 	var session Session
 	var reused *uuid.UUID
+	idleExpired := false
 	err := database.WithTx(ctx, s.pool, func(tx pgx.Tx) error {
 		current, found, err := s.repo.lockSessionByHash(ctx, tx, HashToken(refreshPlain))
 		if err != nil {
@@ -262,16 +270,28 @@ func (s *Service) Refresh(ctx context.Context, refreshPlain string) (Session, er
 		if !current.ExpiresAt.After(s.now()) {
 			return ErrSessionExpired
 		}
+		// A refresh is not activity: an idle session ends instead of being renewed.
+		security, err := settings.GetSecurity(ctx, tx)
+		if err != nil {
+			return err
+		}
+		if idle := security.Idle(); idle > 0 && !current.LastSeenAt.Add(idle).After(s.now()) {
+			idleExpired = true
+			return s.repo.revokeSession(ctx, tx, current.ID)
+		}
 
 		if err := s.repo.revokeSession(ctx, tx, current.ID); err != nil {
 			return err
 		}
-		session, err = s.startSession(ctx, tx, current.UserID)
+		session, err = s.startSession(ctx, tx, current.UserID, &current.LastSeenAt)
 		return err
 	})
 	if reused != nil {
 		logx.From(ctx).Warn("refresh token reuse detected, all sessions revoked", "user_id", *reused)
 		return Session{}, ErrSessionExpired
+	}
+	if idleExpired && err == nil {
+		return Session{}, ErrSessionIdle
 	}
 	if err != nil {
 		return Session{}, err
@@ -304,12 +324,20 @@ func (s *Service) Authenticate(ctx context.Context, accessToken string) (Princip
 	if err != nil {
 		return Principal{}, apperr.ErrUnauthorized
 	}
-	principal, ok, err := s.repo.loadPrincipal(ctx, s.pool, claims.UserID, claims.SessionID)
+	security, err := settings.GetSecurity(ctx, s.pool)
+	if err != nil {
+		return Principal{}, err
+	}
+	principal, ok, err := s.repo.loadPrincipal(ctx, s.pool, claims.UserID, claims.SessionID, security.Idle())
 	if err != nil {
 		return Principal{}, err
 	}
 	if !ok {
 		return Principal{}, ErrSessionExpired
+	}
+	principal.IdleTimeoutMinutes = max(security.IdleTimeoutMinutes, 0)
+	if err := s.repo.touchSession(ctx, s.pool, claims.SessionID); err != nil {
+		logx.From(ctx).Warn("could not record session activity", "error", err)
 	}
 	return principal, nil
 }

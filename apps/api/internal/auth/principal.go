@@ -19,6 +19,8 @@ type Principal struct {
 	Role               Role      `json:"role"`
 	Permissions        []string  `json:"permissions"`
 	MustChangePassword bool      `json:"mustChangePassword"`
+	// IdleTimeoutMinutes lets the screen close an idle session before the server rejects it (0 = no limit).
+	IdleTimeoutMinutes int `json:"idleTimeoutMinutes"`
 }
 
 type Role struct {

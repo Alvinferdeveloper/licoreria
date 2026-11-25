@@ -1357,6 +1357,7 @@ components:
         role: { type: object, properties: { id: { type: string, format: uuid }, code: { type: [string, 'null'] }, name: { type: string } } }
         permissions: { type: array, items: { type: string } }
         mustChangePassword: { type: boolean }
+        idleTimeoutMinutes: { type: integer, description: 'Minutos sin actividad antes de cerrar la sesión (0 = sin límite). El servidor rechaza la sesión inactiva con session_expired y el refresh responde session_idle.' }
     Session:
       type: object
       properties:

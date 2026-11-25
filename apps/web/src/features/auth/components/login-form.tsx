@@ -11,7 +11,7 @@ import { applyApiError } from "@/lib/api/form-errors";
 import { authApi } from "../api";
 import { authCopy } from "../copy";
 import { loginSchema, type LoginValues } from "../schemas";
-import { useSession } from "../session-store";
+import { IDLE_NOTICE_KEY, useSession } from "../session-store";
 
 const copy = authCopy.login;
 
@@ -19,6 +19,16 @@ const copy = authCopy.login;
 export function LoginForm() {
   const setSession = useSession((s) => s.setSession);
   const [formError, setFormError] = useState<string | null>(null);
+  // Shown once after the idle timer or the server closed the session.
+  const [idleNotice] = useState(() => {
+    try {
+      const seen = sessionStorage.getItem(IDLE_NOTICE_KEY) === "1";
+      sessionStorage.removeItem(IDLE_NOTICE_KEY);
+      return seen;
+    } catch {
+      return false;
+    }
+  });
 
   const form = useForm<LoginValues>({ resolver: zodResolver(loginSchema), defaultValues: { identifier: "", password: "" } });
   const { errors, isSubmitting } = form.formState;
@@ -36,7 +46,7 @@ export function LoginForm() {
 
   return (
     <form onSubmit={onSubmit} noValidate className="space-y-5">
-      {formError && <Alert>{formError}</Alert>}
+      {formError ? <Alert>{formError}</Alert> : idleNotice && <Alert tone="info">{copy.idleClosed}</Alert>}
       <Field label={copy.identifier} error={errors.identifier?.message}>
         <Input
           autoComplete="username"

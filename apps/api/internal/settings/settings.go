@@ -32,6 +32,11 @@ type Security struct {
 
 func (s Security) Lockout() time.Duration { return time.Duration(s.LockoutMinutes) * time.Minute }
 
+// Idle is how long a session may go without requests; zero turns the limit off.
+func (s Security) Idle() time.Duration {
+	return time.Duration(max(s.IdleTimeoutMinutes, 0)) * time.Minute
+}
+
 func (s Security) TempPasswordTTL() time.Duration {
 	return time.Duration(s.TempPasswordHours) * time.Hour
 }

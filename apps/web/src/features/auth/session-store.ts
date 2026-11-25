@@ -25,6 +25,15 @@ export const useSession = create<SessionState>()((set) => ({
   clear: () => set({ status: "anonymous", accessToken: null, user: null }),
 }));
 
+/** sessionStorage flag that makes the login screen explain the session closed for inactivity. */
+export const IDLE_NOTICE_KEY = "anejo:idle-logout";
+
+export function flagIdleLogout() {
+  try {
+    sessionStorage.setItem(IDLE_NOTICE_KEY, "1");
+  } catch {}
+}
+
 let inFlight: Promise<string | null> | null = null;
 
 /** Renews the session from the refresh cookie; concurrent callers share one request. */
@@ -36,6 +45,7 @@ export function refreshSession(): Promise<string | null> {
       return session.accessToken;
     })
     .catch((error: unknown) => {
+      if (error instanceof ApiError && error.code === "session_idle") flagIdleLogout();
       if (error instanceof ApiError && error.status === 401) useSession.getState().clear();
       else useSession.setState((state) => ({ status: state.user ? state.status : "anonymous" }));
       return null;

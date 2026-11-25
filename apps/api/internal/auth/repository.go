@@ -87,13 +87,14 @@ func (Repository) recordSuccessfulLogin(ctx context.Context, db database.DBTX, u
 	return nil
 }
 
-func (Repository) createSession(ctx context.Context, db database.DBTX, userID uuid.UUID, tokenHash string, expiresAt time.Time) (uuid.UUID, error) {
+// createSession opens a session; lastSeen carries the activity of the session it replaces (nil means now).
+func (Repository) createSession(ctx context.Context, db database.DBTX, userID uuid.UUID, tokenHash string, expiresAt time.Time, lastSeen *time.Time) (uuid.UUID, error) {
 	client := httpx.Client(ctx)
 	var id uuid.UUID
 	err := db.QueryRow(ctx, `
-		INSERT INTO refresh_sessions (user_id, token_hash, expires_at, ip, user_agent)
-		VALUES ($1, $2, $3, NULLIF($4, '')::inet, NULLIF($5, ''))
-		RETURNING id`, userID, tokenHash, expiresAt, client.IP, client.UserAgent).Scan(&id)
+		INSERT INTO refresh_sessions (user_id, token_hash, expires_at, ip, user_agent, last_seen_at)
+		VALUES ($1, $2, $3, NULLIF($4, '')::inet, NULLIF($5, ''), COALESCE($6, now()))
+		RETURNING id`, userID, tokenHash, expiresAt, client.IP, client.UserAgent, lastSeen).Scan(&id)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("create session: %w", err)
 	}
@@ -101,18 +102,19 @@ func (Repository) createSession(ctx context.Context, db database.DBTX, userID uu
 }
 
 type session struct {
-	ID        uuid.UUID
-	UserID    uuid.UUID
-	ExpiresAt time.Time
-	RevokedAt *time.Time
+	ID         uuid.UUID
+	UserID     uuid.UUID
+	ExpiresAt  time.Time
+	RevokedAt  *time.Time
+	LastSeenAt time.Time
 }
 
 // lockSessionByHash locks the row so two concurrent refreshes can't both rotate the same token.
 func (Repository) lockSessionByHash(ctx context.Context, db database.DBTX, tokenHash string) (session, bool, error) {
 	var s session
 	err := db.QueryRow(ctx, `
-		SELECT id, user_id, expires_at, revoked_at FROM refresh_sessions WHERE token_hash = $1 FOR UPDATE`, tokenHash).
-		Scan(&s.ID, &s.UserID, &s.ExpiresAt, &s.RevokedAt)
+		SELECT id, user_id, expires_at, revoked_at, last_seen_at FROM refresh_sessions WHERE token_hash = $1 FOR UPDATE`, tokenHash).
+		Scan(&s.ID, &s.UserID, &s.ExpiresAt, &s.RevokedAt, &s.LastSeenAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return session{}, false, nil
 	}
@@ -130,6 +132,17 @@ func (Repository) revokeSession(ctx context.Context, db database.DBTX, sessionID
 	return nil
 }
 
+// touchSession records activity at most once a minute, so busy sessions don't write on every request.
+func (Repository) touchSession(ctx context.Context, db database.DBTX, sessionID uuid.UUID) error {
+	_, err := db.Exec(ctx, `
+		UPDATE refresh_sessions SET last_seen_at = now()
+		WHERE id = $1 AND last_seen_at < now() - interval '1 minute'`, sessionID)
+	if err != nil {
+		return fmt.Errorf("touch session: %w", err)
+	}
+	return nil
+}
+
 // revokeAllSessions ends every active session of the user except keep (pass uuid.Nil to end all).
 func (Repository) revokeAllSessions(ctx context.Context, db database.DBTX, userID, keep uuid.UUID) error {
 	_, err := db.Exec(ctx, `
@@ -143,7 +156,9 @@ func (Repository) revokeAllSessions(ctx context.Context, db database.DBTX, userI
 
 // loadPrincipal returns the user behind an active session, or ok=false when the session
 // was revoked, expired or the user was deactivated.
-func (Repository) loadPrincipal(ctx context.Context, db database.DBTX, userID, sessionID uuid.UUID) (Principal, bool, error) {
+// loadPrincipal returns the user behind a live session: not revoked, not expired and, when
+// idle is positive, used within the last idle period.
+func (Repository) loadPrincipal(ctx context.Context, db database.DBTX, userID, sessionID uuid.UUID, idle time.Duration) (Principal, bool, error) {
 	p := Principal{SessionID: sessionID}
 	err := db.QueryRow(ctx, `
 		SELECT u.id, u.full_name, COALESCE(u.email::text, ''), u.username, u.must_change_password,
@@ -152,11 +167,12 @@ func (Repository) loadPrincipal(ctx context.Context, db database.DBTX, userID, s
 		                FILTER (WHERE p.id IS NOT NULL), '{}')
 		FROM users u
 		JOIN refresh_sessions s ON s.user_id = u.id AND s.id = $2 AND s.revoked_at IS NULL AND s.expires_at > now()
+		     AND ($3::int <= 0 OR s.last_seen_at > now() - make_interval(secs => $3::int))
 		JOIN roles r ON r.id = u.role_id
 		LEFT JOIN role_permissions rp ON rp.role_id = r.id
 		LEFT JOIN permissions p ON p.id = rp.permission_id
 		WHERE u.id = $1 AND u.active
-		GROUP BY u.id, r.id`, userID, sessionID).
+		GROUP BY u.id, r.id`, userID, sessionID, int(idle.Seconds())).
 		Scan(&p.UserID, &p.FullName, &p.Email, &p.Username, &p.MustChangePassword,
 			&p.Role.ID, &p.Role.Code, &p.Role.Name, &p.Permissions)
 	if errors.Is(err, pgx.ErrNoRows) {

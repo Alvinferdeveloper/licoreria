@@ -14,6 +14,8 @@ export interface SessionUser {
   role: Role;
   permissions: string[];
   mustChangePassword: boolean;
+  /** Minutes without activity before the session closes; 0 means no limit. */
+  idleTimeoutMinutes: number;
 }
 
 export interface SessionResponse {
