@@ -206,13 +206,16 @@ func (h *Handler) cashiers(ctx context.Context, days int, limit float64) ([]Cash
 		       coalesce(s.sales, 0), coalesce(s.total, 0)::text, coalesce(s.voids, 0), coalesce(s.voided, 0)::text,
 		       coalesce(s.discounts, 0), coalesce(s.discount, 0)::text, coalesce(s.near, 0), coalesce(s.over, 0),
 		       coalesce(c.shifts, 0), coalesce(c.short, 0), coalesce(c.shortage, 0)::text, coalesce(c.overage, 0)::text,
-		       coalesce(m.expenses, 0), coalesce(a.pin, 0), coalesce(a.outside, 0)
+		       coalesce(m.expenses, 0), coalesce(a.pin, 0),
+		       -- Administrators may always work outside hours; that is logged but not a risk.
+		       CASE WHEN r.code = 'admin' THEN 0 ELSE coalesce(a.outside, 0) END
 		FROM users u
+		JOIN roles r ON r.id = u.role_id
 		LEFT JOIN s ON s.user_id = u.id
 		LEFT JOIN c ON c.user_id = u.id
 		LEFT JOIN m ON m.user_id = u.id
 		LEFT JOIN a ON a.user_id = u.id
-		WHERE s.user_id IS NOT NULL OR c.user_id IS NOT NULL OR a.pin > 0 OR a.outside > 0
+		WHERE s.user_id IS NOT NULL OR c.user_id IS NOT NULL OR a.pin > 0 OR (a.outside > 0 AND r.code <> 'admin')
 		ORDER BY u.full_name`, days, limit)
 	if err != nil {
 		return nil, fmt.Errorf("load cashier risk: %w", err)
@@ -246,8 +249,10 @@ func (h *Handler) events(ctx context.Context, days int) ([]Event, error) {
 			UNION ALL
 			SELECT CASE l.action WHEN 'authorization.failed' THEN 'pin' ELSE 'outside_hours' END, l.created_at, u.full_name, NULL,
 			       coalesce(t.full_name, ''), NULL::uuid
-			FROM audit_log l JOIN users u ON u.id = l.user_id LEFT JOIN users t ON t.id = l.entity_id AND l.action = 'authorization.failed'
-			WHERE l.action IN ('authorization.failed', 'auth.login_outside_hours') AND l.created_at >= (SELECT since FROM p)
+			FROM audit_log l JOIN users u ON u.id = l.user_id JOIN roles ur ON ur.id = u.role_id
+			LEFT JOIN users t ON t.id = l.entity_id AND l.action = 'authorization.failed'
+			WHERE (l.action = 'authorization.failed' OR (l.action = 'auth.login_outside_hours' AND ur.code <> 'admin'))
+			  AND l.created_at >= (SELECT since FROM p)
 		) e ORDER BY at DESC LIMIT 25`, days, ShortageEvent)
 	if err != nil {
 		return nil, fmt.Errorf("load risk events: %w", err)
