@@ -1,6 +1,7 @@
 package config
 
 import (
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,26 @@ func setRequired(t *testing.T) {
 	t.Helper()
 	t.Setenv("DATABASE_URL", "postgres://u:p@localhost/db")
 	t.Setenv("JWT_SECRET", testSecret)
+}
+
+// DB_PASSWORD goes into the URL as typed: special characters must still give a valid URL.
+func TestDatabasePasswordWithSpecialCharacters(t *testing.T) {
+	setRequired(t)
+	t.Setenv("DATABASE_URL", "postgres://licoreria:contraseña@#1 x@db:5432/licoreria?sslmode=disable")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	u, err := url.Parse(cfg.DatabaseURL)
+	if err != nil {
+		t.Fatalf("still invalid: %v", err)
+	}
+	if p, _ := u.User.Password(); p != "contraseña@#1 x" || u.Host != "db:5432" || u.Path != "/licoreria" {
+		t.Errorf("got password %q host %q path %q", p, u.Host, u.Path)
+	}
+	if escapeDatabasePassword(cfg.DatabaseURL) != cfg.DatabaseURL {
+		t.Error("escaping twice must not change an already escaped URL")
+	}
 }
 
 func TestLoadDefaults(t *testing.T) {

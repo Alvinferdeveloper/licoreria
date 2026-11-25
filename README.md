@@ -36,7 +36,9 @@ licoreria/
 
 ## Puesta en marcha
 
-Copia `.env.example` a `.env` y define `DB_PASSWORD`.
+**Para instalarlo y probarlo paso a paso, sigue [INSTALACION.md](INSTALACION.md).**
+
+Copia `.env.example` a `.env` y define `DB_PASSWORD` y `JWT_SECRET`.
 
 **Todo en contenedores** (aplicación en http://localhost:3000):
 

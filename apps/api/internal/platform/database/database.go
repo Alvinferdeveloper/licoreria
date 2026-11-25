@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -16,10 +17,29 @@ import (
 	"licoreria/api/migrations"
 )
 
-func Connect(ctx context.Context, url string) (*pgxpool.Pool, error) {
-	cfg, err := pgxpool.ParseConfig(url)
+// redact keeps the database password out of error messages, and so out of the logs.
+func redact(err error, databaseURL string) error {
+	u, parseErr := url.Parse(databaseURL)
+	if parseErr != nil || u.User == nil {
+		return err
+	}
+	pass, ok := u.User.Password()
+	if !ok || pass == "" {
+		return err
+	}
+	msg := err.Error()
+	for _, secret := range []string{pass, url.QueryEscape(pass), url.PathEscape(pass), url.UserPassword("", pass).String()[1:]} {
+		if secret != "" {
+			msg = strings.ReplaceAll(msg, secret, "xxxxx")
+		}
+	}
+	return errors.New(msg)
+}
+
+func Connect(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
+	cfg, err := pgxpool.ParseConfig(databaseURL)
 	if err != nil {
-		return nil, fmt.Errorf("parse database url: %w", err)
+		return nil, fmt.Errorf("parse database url: %w", redact(err, databaseURL))
 	}
 	cfg.MaxConnLifetime = time.Hour
 	cfg.MaxConnIdleTime = 15 * time.Minute
@@ -33,7 +53,7 @@ func Connect(ctx context.Context, url string) (*pgxpool.Pool, error) {
 	defer cancel()
 	if err := pool.Ping(pingCtx); err != nil {
 		pool.Close()
-		return nil, fmt.Errorf("ping database: %w", err)
+		return nil, fmt.Errorf("ping database: %w", redact(err, databaseURL))
 	}
 	return pool, nil
 }
@@ -46,7 +66,7 @@ func Migrator(databaseURL string) (*migrate.Migrate, error) {
 	}
 	m, err := migrate.NewWithSourceInstance("iofs", source, toMigrateURL(databaseURL))
 	if err != nil {
-		return nil, fmt.Errorf("init migrator: %w", err)
+		return nil, fmt.Errorf("init migrator: %w", redact(err, databaseURL))
 	}
 	return m, nil
 }

@@ -60,6 +60,28 @@ func (c Config) IsProduction() bool { return c.Env == "production" }
 
 const minJWTSecretBytes = 32
 
+// escapeDatabasePassword percent-encodes the password of a database URL. Compose builds the
+// URL from DB_PASSWORD as typed, so characters like ñ, @, # or spaces would break parsing.
+// A password that is already percent-encoded is kept as is.
+func escapeDatabasePassword(raw string) string {
+	scheme, rest, ok := strings.Cut(raw, "://")
+	if !ok {
+		return raw
+	}
+	at := strings.LastIndex(rest, "@")
+	if at < 0 {
+		return raw
+	}
+	user, pass, ok := strings.Cut(rest[:at], ":")
+	if !ok {
+		return raw
+	}
+	if unescaped, err := url.PathUnescape(pass); err == nil {
+		pass = unescaped
+	}
+	return scheme + "://" + url.UserPassword(user, pass).String() + "@" + rest[at+1:]
+}
+
 func Load() (Config, error) {
 	var errs []error
 	env := getEnv("APP_ENV", "development")
@@ -72,7 +94,7 @@ func Load() (Config, error) {
 	cfg := Config{
 		Env:            env,
 		HTTPAddr:       getEnv("HTTP_ADDR", ":8080"),
-		DatabaseURL:    os.Getenv("DATABASE_URL"),
+		DatabaseURL:    escapeDatabasePassword(os.Getenv("DATABASE_URL")),
 		AllowedOrigins: splitList(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000")),
 		LogLevel:       getEnv("LOG_LEVEL", "info"),
 		LogFormat:      getEnv("LOG_FORMAT", defaultLogFormat),
